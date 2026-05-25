@@ -88,6 +88,7 @@
     ui.printMetaMatches = document.getElementById("print-meta-matches");
     ui.bracketDivision = document.getElementById("bracket-division");
     ui.generateBracket = document.getElementById("generate-bracket");
+    ui.generateBracketStandings = document.getElementById("generate-bracket-standings");
     ui.printBracket = document.getElementById("print-bracket");
     ui.exportBracket = document.getElementById("export-bracket");
     ui.importBracketJson = document.getElementById("import-bracket-json");
@@ -140,6 +141,7 @@
     ui.matchTableBody.addEventListener("click", handleMatchActions);
     ui.bracketDivision.addEventListener("change", renderBrackets);
     ui.generateBracket.addEventListener("click", handleGenerateBracket);
+    ui.generateBracketStandings.addEventListener("click", handleGenerateBracketFromStandings);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
     ui.importBracketJson.addEventListener("change", handleImportBracket);
@@ -494,10 +496,52 @@
       return;
     }
 
+    generateBracketForTeams(divisionId, teams);
+  }
+
+  function handleGenerateBracketFromStandings() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var completedPoolMatches = state.matches.filter(function (match) {
+      return match.divisionId === divisionId && match.stage === "pool" && match.status === "completed";
+    });
+    if (!completedPoolMatches.length) {
+      window.alert("Complete at least one pool match before seeding from standings.");
+      return;
+    }
+
+    var orderedTeams = computeStandings(divisionId).map(function (row) {
+      return row.team;
+    });
+    if (orderedTeams.length < 2) {
+      window.alert("Need at least two teams in this division.");
+      return;
+    }
+
+    generateBracketForTeams(divisionId, orderedTeams);
+  }
+
+  function generateBracketForTeams(divisionId, teams) {
+    if (teams.length < 2) {
+      return;
+    }
+
     state.matches = state.matches.filter(function (match) {
       return !(match.divisionId === divisionId && match.stage === "bracket");
     });
 
+    var generated = buildSingleEliminationMatches(divisionId, teams);
+    state.matches = state.matches.concat(generated);
+    recomputeBracketProgression(divisionId);
+    saveState();
+    renderAll();
+  }
+
+  function buildSingleEliminationMatches(divisionId, teams) {
     var size = nextPowerOfTwo(teams.length);
     var rounds = Math.log2(size);
     var seeded = teams.slice();
@@ -523,10 +567,7 @@
       priorRound = currentRound;
     }
 
-    state.matches = state.matches.concat(all);
-    recomputeBracketProgression(divisionId);
-    saveState();
-    renderAll();
+    return all;
   }
 
   function handleAutoAssignSchedule() {

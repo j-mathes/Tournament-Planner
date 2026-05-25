@@ -34,6 +34,7 @@ It is designed to:
   - Automatic winner and status updates
 - Brackets
   - Generate single-elimination bracket per division
+  - Generate bracket seeded from current division standings
   - Auto-advance bye matches
   - Automatic winner progression to later rounds
   - Bracket board grouped by rounds
