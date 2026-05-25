@@ -1,20 +1,20 @@
 # Tournament Planner
 
-Browser-based tournament organizer — static web app, no backend, no build tools.
+Browser-based tournament organizer ï¿½ static web app, no backend, no build tools.
 
 ## Features
 
-- **Tournament setup** — name, dates, divisions, teams, venues/courts
-- **Match formats** — Best of 3, Best of 5, Two Sets to 25, Single Set to 25 (per division)
-- **Pool play** — round-robin match generation per division
-- **Bracket formats** — Single Elimination, Consolation Bracket, Double Elimination, Swiss System
-- **Scheduling** — auto-assign venue/court/time; conflict detection for team and court overlaps
-- **Work assignments** — auto-assign and balance officiation duties; conflict warnings
-- **Standings** — wins ? set ratio ? point ratio tiebreakers; CSV export
-- **Public display** — court board, live standings, and match schedule views (full-screen ready)
-- **Admin panel** — PIN-protected kiosk lock, audit log, division status board, test data generator
-- **Data portability** — JSON full export/import, CSV team and schedule export, bracket JSON export/import
-- **PWA** — installable, offline-capable via Service Worker
+- **Tournament setup** ï¿½ name, dates, divisions, teams, venues/courts
+- **Match formats** ï¿½ Best of 3, Best of 5, Two Sets to 25, Single Set to 25 (per division)
+- **Pool play** ï¿½ round-robin match generation per division
+- **Bracket formats** ï¿½ Single Elimination, Consolation Bracket, Double Elimination, Swiss System
+- **Scheduling** ï¿½ auto-assign venue/court/time; conflict detection for team and court overlaps
+- **Work assignments** ï¿½ auto-assign and balance officiation duties; conflict warnings
+- **Standings** ï¿½ wins ? set ratio ? point ratio tiebreakers; CSV export
+- **Public display** ï¿½ court board, live standings, and match schedule views (full-screen ready)
+- **Admin panel** ï¿½ PIN-protected kiosk lock, audit log, division status board, test data generator
+- **Data portability** ï¿½ JSON full export/import, CSV team and schedule export, bracket JSON export/import
+- **PWA** ï¿½ installable, offline-capable via Service Worker
 
 ## Tech Stack
 
