@@ -154,6 +154,14 @@ button.danger {
   background: var(--danger);
 }
 
+button.secondary {
+  background: #5f6f65;
+}
+
+button.secondary:hover {
+  background: #45534b;
+}
+
 .form-actions {
   display: flex;
   gap: 0.6rem;

@@ -40,15 +40,21 @@
     ui.importJson = document.getElementById("import-json");
 
     ui.divisionForm = document.getElementById("division-form");
+    ui.divisionEditId = document.getElementById("division-edit-id");
     ui.divisionName = document.getElementById("division-name");
+    ui.divisionSubmitBtn = document.getElementById("division-submit-btn");
+    ui.divisionCancelEdit = document.getElementById("division-cancel-edit");
     ui.divisionTableBody = document.getElementById("division-table-body");
 
     ui.teamForm = document.getElementById("team-form");
+    ui.teamEditId = document.getElementById("team-edit-id");
     ui.teamName = document.getElementById("team-name");
     ui.teamClub = document.getElementById("team-club");
     ui.teamCoach = document.getElementById("team-coach");
     ui.teamDivision = document.getElementById("team-division");
     ui.teamSeed = document.getElementById("team-seed");
+    ui.teamSubmitBtn = document.getElementById("team-submit-btn");
+    ui.teamCancelEdit = document.getElementById("team-cancel-edit");
     ui.teamTableBody = document.getElementById("team-table-body");
 
     ui.matchDivision = document.getElementById("match-division");
@@ -69,9 +75,11 @@
     ui.importJson.addEventListener("change", importJson);
 
     ui.divisionForm.addEventListener("submit", handleDivisionAdd);
+    ui.divisionCancelEdit.addEventListener("click", resetDivisionForm);
     ui.divisionTableBody.addEventListener("click", handleDivisionActions);
 
     ui.teamForm.addEventListener("submit", handleTeamAdd);
+    ui.teamCancelEdit.addEventListener("click", resetTeamForm);
     ui.teamTableBody.addEventListener("click", handleTeamActions);
 
     ui.matchDivision.addEventListener("change", function () {
@@ -138,12 +146,27 @@
       return;
     }
 
+    var editId = ui.divisionEditId.value;
+    if (editId) {
+      var current = findDivision(editId);
+      if (!current) {
+        resetDivisionForm();
+        return;
+      }
+
+      current.name = name;
+      resetDivisionForm();
+      saveState();
+      renderAll();
+      return;
+    }
+
     state.divisions.push({
       id: createId("div"),
       name: name
     });
 
-    ui.divisionName.value = "";
+    resetDivisionForm();
     saveState();
     renderAll();
   }
@@ -156,6 +179,20 @@
 
     var divisionId = button.getAttribute("data-division-id");
     var action = button.getAttribute("data-action");
+
+    if (action === "edit") {
+      var division = findDivision(divisionId);
+      if (!division) {
+        return;
+      }
+
+      ui.divisionEditId.value = division.id;
+      ui.divisionName.value = division.name;
+      ui.divisionSubmitBtn.textContent = "Save Division";
+      ui.divisionCancelEdit.hidden = false;
+      ui.divisionName.focus();
+      return;
+    }
 
     if (action === "delete") {
       var inUse = state.teams.some(function (team) {
@@ -191,6 +228,25 @@
     }
 
     var seed = parseInt(ui.teamSeed.value, 10);
+    var editId = ui.teamEditId.value;
+    if (editId) {
+      var team = findTeam(editId);
+      if (!team) {
+        resetTeamForm();
+        return;
+      }
+
+      team.name = name;
+      team.club = ui.teamClub.value.trim();
+      team.coachName = ui.teamCoach.value.trim();
+      team.divisionId = ui.teamDivision.value;
+      team.seed = Number.isFinite(seed) ? seed : null;
+      resetTeamForm();
+      saveState();
+      renderAll();
+      return;
+    }
+
     state.teams.push({
       id: createId("team"),
       name: name,
@@ -200,7 +256,7 @@
       seed: Number.isFinite(seed) ? seed : null
     });
 
-    ui.teamForm.reset();
+    resetTeamForm();
     saveState();
     renderAll();
   }
@@ -213,6 +269,24 @@
 
     var teamId = button.getAttribute("data-team-id");
     var action = button.getAttribute("data-action");
+
+    if (action === "edit") {
+      var editTeam = findTeam(teamId);
+      if (!editTeam) {
+        return;
+      }
+
+      ui.teamEditId.value = editTeam.id;
+      ui.teamName.value = editTeam.name;
+      ui.teamClub.value = editTeam.club || "";
+      ui.teamCoach.value = editTeam.coachName || "";
+      ui.teamDivision.value = editTeam.divisionId;
+      ui.teamSeed.value = Number.isFinite(editTeam.seed) ? String(editTeam.seed) : "";
+      ui.teamSubmitBtn.textContent = "Save Team";
+      ui.teamCancelEdit.hidden = false;
+      ui.teamName.focus();
+      return;
+    }
 
     if (action === "delete") {
       state.teams = state.teams.filter(function (team) {
@@ -439,7 +513,10 @@
         return "<tr>" +
           "<td>" + escapeHtml(division.name) + "</td>" +
           "<td>" + count + "</td>" +
-          "<td><button type=\"button\" data-action=\"delete\" data-division-id=\"" + escapeHtml(division.id) + "\">Delete</button></td>" +
+          "<td>" +
+          "<button type=\"button\" data-action=\"edit\" data-division-id=\"" + escapeHtml(division.id) + "\">Edit</button> " +
+          "<button type=\"button\" data-action=\"delete\" data-division-id=\"" + escapeHtml(division.id) + "\">Delete</button>" +
+          "</td>" +
           "</tr>";
       })
       .join("");
@@ -455,10 +532,27 @@
           "<td><strong>" + escapeHtml(team.name) + "</strong><br><small>" + escapeHtml(team.club || "-") + "</small></td>" +
           "<td>" + escapeHtml(division ? division.name : "-") + "</td>" +
           "<td>" + (team.seed || "-") + "</td>" +
-          "<td><button type=\"button\" data-action=\"delete\" data-team-id=\"" + escapeHtml(team.id) + "\">Delete</button></td>" +
+          "<td>" +
+          "<button type=\"button\" data-action=\"edit\" data-team-id=\"" + escapeHtml(team.id) + "\">Edit</button> " +
+          "<button type=\"button\" data-action=\"delete\" data-team-id=\"" + escapeHtml(team.id) + "\">Delete</button>" +
+          "</td>" +
           "</tr>";
       })
       .join("");
+  }
+
+  function resetDivisionForm() {
+    ui.divisionForm.reset();
+    ui.divisionEditId.value = "";
+    ui.divisionSubmitBtn.textContent = "Add Division";
+    ui.divisionCancelEdit.hidden = true;
+  }
+
+  function resetTeamForm() {
+    ui.teamForm.reset();
+    ui.teamEditId.value = "";
+    ui.teamSubmitBtn.textContent = "Add Team";
+    ui.teamCancelEdit.hidden = true;
   }
 
   function renderMatches() {

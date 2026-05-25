@@ -62,11 +62,13 @@
       <section class="view" id="view-divisions" aria-labelledby="divisions-title">
         <h2 id="divisions-title">Divisions</h2>
         <form id="division-form" class="card form-inline">
+          <input type="hidden" id="division-edit-id" value="">
           <label class="grow">
             Division Name
             <input type="text" id="division-name" required maxlength="80" placeholder="Example: 16U Girls">
           </label>
-          <button type="submit">Add Division</button>
+          <button type="submit" id="division-submit-btn">Add Division</button>
+          <button type="button" id="division-cancel-edit" class="secondary" hidden>Cancel</button>
         </form>
         <div class="card">
           <table>
@@ -85,6 +87,7 @@
       <section class="view" id="view-teams" aria-labelledby="teams-title">
         <h2 id="teams-title">Teams</h2>
         <form id="team-form" class="card form-grid">
+          <input type="hidden" id="team-edit-id" value="">
           <label>
             Team Name
             <input type="text" id="team-name" required maxlength="120">
@@ -106,7 +109,8 @@
             <input type="number" id="team-seed" min="1" step="1" placeholder="Optional">
           </label>
           <div class="form-actions">
-            <button type="submit">Add Team</button>
+            <button type="submit" id="team-submit-btn">Add Team</button>
+            <button type="button" id="team-cancel-edit" class="secondary" hidden>Cancel</button>
           </div>
         </form>
         <div class="card">
