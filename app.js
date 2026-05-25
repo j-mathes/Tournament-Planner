@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   "use strict";
 
   var STORAGE_KEY = "tp.static.v1";
@@ -487,7 +487,7 @@
         status: "scheduled",
         setScores: [],
         winnerId: null,
-        loserId: null
+        loserId: null,
         workTeamId: null
       });
     });
@@ -1456,6 +1456,100 @@
     });
   }
 
+  // -- Work-team assignment engine ---------------------------------------------
+
+  function autoAssignWorkTeams(divisionId) {
+    var divisionTeams = getDivisionTeams(divisionId);
+    if (divisionTeams.length < 3) {
+      window.alert("Need at least 3 teams in the division to auto-assign work teams.");
+      return;
+    }
+
+    var matches = state.matches.filter(function (m) {
+      return m.divisionId === divisionId;
+    }).sort(function (a, b) {
+      var ta = a.startTime || "";
+      var tb = b.startTime || "";
+      if (ta && tb && ta !== tb) { return ta.localeCompare(tb); }
+      return a.roundNumber - b.roundNumber;
+    });
+
+    var workCount = {};
+    divisionTeams.forEach(function (t) { workCount[t.id] = 0; });
+    matches.forEach(function (m) {
+      if (m.workTeamId) { workCount[m.workTeamId] = (workCount[m.workTeamId] || 0) + 1; }
+    });
+
+    matches.forEach(function (match) {
+      if (match.workTeamId) { return; }
+
+      var slot = match.startTime || ("round-" + match.roundNumber);
+
+      var busyPlaying = {};
+      matches.forEach(function (other) {
+        var otherSlot = other.startTime || ("round-" + other.roundNumber);
+        if (otherSlot !== slot) { return; }
+        if (other.teamAId) { busyPlaying[other.teamAId] = true; }
+        if (other.teamBId) { busyPlaying[other.teamBId] = true; }
+      });
+
+      var busyWorking = {};
+      matches.forEach(function (other) {
+        if (!other.workTeamId) { return; }
+        var otherSlot = other.startTime || ("round-" + other.roundNumber);
+        if (otherSlot !== slot) { return; }
+        busyWorking[other.workTeamId] = true;
+      });
+
+      var candidates = divisionTeams.filter(function (t) {
+        return !busyPlaying[t.id] && !busyWorking[t.id];
+      });
+
+      if (!candidates.length) { return; }
+
+      candidates.sort(function (a, b) {
+        var diff = (workCount[a.id] || 0) - (workCount[b.id] || 0);
+        return diff !== 0 ? diff : a.name.localeCompare(b.name);
+      });
+
+      match.workTeamId = candidates[0].id;
+      workCount[candidates[0].id] = (workCount[candidates[0].id] || 0) + 1;
+    });
+  }
+
+  function computeWorkConflicts(divisionId) {
+    var matches = state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.workTeamId;
+    });
+    var conflicts = [];
+
+    matches.forEach(function (workMatch) {
+      var slot = workMatch.startTime || ("round-" + workMatch.roundNumber);
+      matches.forEach(function (playMatch) {
+        if (playMatch.id === workMatch.id) { return; }
+        var playSlot = playMatch.startTime || ("round-" + playMatch.roundNumber);
+        if (playSlot !== slot) { return; }
+        if (playMatch.teamAId !== workMatch.workTeamId && playMatch.teamBId !== workMatch.workTeamId) { return; }
+        var team = findTeam(workMatch.workTeamId);
+        conflicts.push((team ? team.name : "Unknown") + " is both playing and working in the same slot (Round " + workMatch.roundNumber + ").");
+      });
+    });
+
+    return dedupeStrings(conflicts);
+  }
+
+  function handleAutoAssignWorkTeams() {
+    var divisionId = ui.matchDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division first.");
+      return;
+    }
+    autoAssignWorkTeams(divisionId);
+    saveState();
+    renderAll();
+  }
+
+  // ---------------------------------------------------------------------------
   function getMatchLabel(match) {
     var a = findTeam(match.teamAId);
     var b = findTeam(match.teamBId);
@@ -1514,7 +1608,6 @@
 
     var rows = computeStandings(divisionId);
     var division = findDivision(divisionId);
-      // ── Work-team assignment engine ───────────────────────────────────────────
     ui.standingsTableBody.innerHTML = rows
       .map(function (row, index) {
         return "<tr>" +
@@ -1525,44 +1618,49 @@
           "<td>" + formatRatio(row.setsWon, row.setsLost) + "</td>" +
           "<td>" + formatRatio(row.pointsFor, row.pointsAgainst) + "</td>" +
           "</tr>";
-        function renderWorkActions(match) {
-          var workTeam = findTeam(match.workTeamId);
-          var isEditing = workEditMatchId === match.id;
       })
-          var label = workTeam
-            ? "<span class=\"work-team-label\">" + escapeHtml(workTeam.name) + "</span>"
-            : "<span class=\"work-team-label muted\">—</span>";
       .join("");
-          var buttons = "<div class=\"work-actions\">" +
-            "<button type=\"button\" class=\"secondary\" data-action=\"edit-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
-            (isEditing ? "Editing…" : (match.workTeamId ? "Change" : "Assign Work")) +
-            "</button>";
 
-          if (match.workTeamId) {
-            buttons += " <button type=\"button\" class=\"secondary\" data-action=\"clear-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">Clear</button>";
-          }
-          buttons += "</div>";
     renderPrintMeta(ui.printMetaStandings, "Standings", division ? ("Division: " + division.name) : "");
-          var picker = "";
-          if (isEditing) {
-            var divisionTeams = getDivisionTeams(match.divisionId);
-            var opts = divisionTeams
-              .filter(function (t) { return t.id !== match.teamAId && t.id !== match.teamBId; })
-              .map(function (t) {
-                var sel = t.id === match.workTeamId ? " selected" : "";
-                return "<option value=\"" + escapeHtml(t.id) + "\"" + sel + ">" + escapeHtml(t.name) + "</option>";
-              }).join("");
-            picker = "<div class=\"work-picker\">" +
-              "<select data-action=\"set-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
-              "<option value=\"\">— none —</option>" + opts +
-              "</select>" +
-              " <button type=\"button\" class=\"secondary\" data-action=\"cancel-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">Cancel</button>" +
-              "</div>";
-          }
   }
-          return label + buttons + picker;
-        }
 
+  function renderWorkActions(match) {
+    var workTeam = findTeam(match.workTeamId);
+    var isEditing = workEditMatchId === match.id;
+
+    var label = workTeam
+      ? "<span class=\"work-team-label\">" + escapeHtml(workTeam.name) + "</span>"
+      : "<span class=\"work-team-label muted\">\u2014</span>";
+
+    var buttons = "<div class=\"work-actions\">" +
+      "<button type=\"button\" class=\"secondary\" data-action=\"edit-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
+      (isEditing ? "Editing\u2026" : (match.workTeamId ? "Change" : "Assign Work")) +
+      "</button>";
+
+    if (match.workTeamId) {
+      buttons += " <button type=\"button\" class=\"secondary\" data-action=\"clear-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">Clear</button>";
+    }
+    buttons += "</div>";
+
+    var picker = "";
+    if (isEditing) {
+      var divisionTeams = getDivisionTeams(match.divisionId);
+      var opts = divisionTeams
+        .filter(function (t) { return t.id !== match.teamAId && t.id !== match.teamBId; })
+        .map(function (t) {
+          var sel = t.id === match.workTeamId ? " selected" : "";
+          return "<option value=\"" + escapeHtml(t.id) + "\"" + sel + ">" + escapeHtml(t.name) + "</option>";
+        }).join("");
+      picker = "<div class=\"work-picker\">" +
+        "<select data-action=\"set-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
+        "<option value=\"\">\u2014 none \u2014</option>" + opts +
+        "</select>" +
+        " <button type=\"button\" class=\"secondary\" data-action=\"cancel-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">Cancel</button>" +
+        "</div>";
+    }
+
+    return label + buttons + picker;
+  }
   function renderBrackets() {
     var divisionId = ui.bracketDivision.value || "";
     if (!divisionId) {
@@ -2338,7 +2436,6 @@
       stage: "bracket",
       roundNumber: roundNumber,
       indexInRound: indexInRound,
-        workTeamId: null
       teamAId: teamAId,
       teamBId: teamBId,
       venueId: null,
@@ -2348,7 +2445,8 @@
       status: "scheduled",
       setScores: [],
       winnerId: null,
-      loserId: null
+      loserId: null,
+      workTeamId: null
     };
   }
 
