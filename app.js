@@ -2192,8 +2192,14 @@
         var entered = window.prompt("Enter admin PIN to unlock:");
         if (entered === null) { return; }
         if (entered !== storedPin) {
-          window.alert("Incorrect PIN.");
-          return;
+          var reset = window.confirm(
+            "Incorrect PIN.\n\n" +
+            "Forgot your PIN? Click OK to clear the PIN and unlock.\n" +
+            "Click Cancel to try again."
+          );
+          if (!reset) { return; }
+          localStorage.removeItem(ADMIN_PIN_KEY);
+          auditLog("Admin PIN reset after forgotten PIN");
         }
       }
       adminUnlocked = true;
@@ -2205,35 +2211,57 @@
   function renderAdminSecurity() {
     if (!ui.adminSecurityCard) { return; }
     var storedPin = localStorage.getItem(ADMIN_PIN_KEY);
-    var pinStatus = storedPin ? "PIN is set." : "No PIN set \u2014 anyone can unlock.";
-    ui.adminSecurityCard.innerHTML =
-      "<h3 style='margin:0 0 0.6rem'>\uD83D\uDD10 Admin Security</h3>" +
-      "<p style='margin:0 0 0.75rem;font-size:0.9rem'>" + escapeHtml(pinStatus) + "</p>" +
-      "<form id='pin-form' class='form-grid' style='gap:0.5rem'>" +
-        "<label style='max-width:200px'>New PIN (4 digits)<input type='password' id='pin-input' maxlength='4' pattern='[0-9]{4}' placeholder='1234' inputmode='numeric'></label>" +
-        "<div class='form-actions'>" +
-          "<button type='submit' id='pin-save-btn'>Save PIN</button>" +
-          (storedPin ? "<button type='button' id='pin-clear-btn' class='secondary'>Remove PIN</button>" : "") +
-        "</div>" +
-      "</form>";
 
-    document.getElementById("pin-form").addEventListener("submit", function (e) {
-      e.preventDefault();
-      var val = document.getElementById("pin-input").value.trim();
-      if (!/^\d{4}$/.test(val)) {
-        window.alert("PIN must be exactly 4 digits.");
-        return;
-      }
-      localStorage.setItem(ADMIN_PIN_KEY, val);
-      auditLog("Admin PIN changed");
-      renderAdminSecurity();
-    });
-    var clearBtn = document.getElementById("pin-clear-btn");
-    if (clearBtn) {
-      clearBtn.addEventListener("click", function () {
-        if (window.confirm("Remove the admin PIN?")) {
+    if (!storedPin) {
+      ui.adminSecurityCard.innerHTML =
+        "<h3 style='margin:0 0 0.6rem'>\uD83D\uDD10 Admin Security</h3>" +
+        "<p style='margin:0 0 0.75rem;font-size:0.9rem'>PIN lock is <strong>disabled</strong> \u2014 the Lock button can be unlocked by anyone.</p>" +
+        "<div class='form-actions'>" +
+          "<button type='button' id='pin-enable-btn' class='secondary'>Enable PIN Lock</button>" +
+        "</div>";
+
+      document.getElementById("pin-enable-btn").addEventListener("click", function () {
+        var val = window.prompt("Set a 4-digit PIN to require on unlock:");
+        if (val === null) { return; }
+        val = val.trim();
+        if (!/^\d{4}$/.test(val)) {
+          window.alert("PIN must be exactly 4 digits (0\u20139).");
+          return;
+        }
+        localStorage.setItem(ADMIN_PIN_KEY, val);
+        auditLog("Admin PIN lock enabled");
+        renderAdminSecurity();
+      });
+    } else {
+      ui.adminSecurityCard.innerHTML =
+        "<h3 style='margin:0 0 0.6rem'>\uD83D\uDD10 Admin Security</h3>" +
+        "<p style='margin:0 0 0.75rem;font-size:0.9rem'>PIN lock is <strong>enabled</strong>.</p>" +
+        "<form id='pin-form' class='form-grid' style='gap:0.5rem'>" +
+          "<label style='max-width:200px'>Change PIN (4 digits)" +
+            "<input type='password' id='pin-input' maxlength='4' pattern='[0-9]{4}' placeholder='1234' inputmode='numeric'>" +
+          "</label>" +
+          "<div class='form-actions'>" +
+            "<button type='submit' id='pin-save-btn'>Save New PIN</button>" +
+            "<button type='button' id='pin-disable-btn' class='secondary'>Disable PIN Lock</button>" +
+          "</div>" +
+        "</form>";
+
+      document.getElementById("pin-form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var val = document.getElementById("pin-input").value.trim();
+        if (!/^\d{4}$/.test(val)) {
+          window.alert("PIN must be exactly 4 digits (0\u20139).");
+          return;
+        }
+        localStorage.setItem(ADMIN_PIN_KEY, val);
+        auditLog("Admin PIN changed");
+        renderAdminSecurity();
+      });
+
+      document.getElementById("pin-disable-btn").addEventListener("click", function () {
+        if (window.confirm("Disable PIN lock? Anyone will be able to unlock admin.")) {
           localStorage.removeItem(ADMIN_PIN_KEY);
-          auditLog("Admin PIN removed");
+          auditLog("Admin PIN lock disabled");
           renderAdminSecurity();
         }
       });
