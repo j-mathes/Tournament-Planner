@@ -301,6 +301,7 @@
       }
 
       current.name = name;
+      current.formatId = ui.divisionFormat.value || null;
       resetDivisionForm();
       saveState();
       renderAll();
@@ -309,7 +310,8 @@
 
     state.divisions.push({
       id: createId("div"),
-      name: name
+      name: name,
+      formatId: ui.divisionFormat.value || null
     });
 
     resetDivisionForm();
@@ -334,6 +336,7 @@
 
       ui.divisionEditId.value = division.id;
       ui.divisionName.value = division.name;
+      ui.divisionFormat.value = division.formatId || "";
       ui.divisionSubmitBtn.textContent = "Save Division";
       ui.divisionCancelEdit.hidden = false;
       ui.divisionName.focus();
@@ -1682,28 +1685,28 @@
       id: "v-test-main",
       name: "Main Sports Center",
       courts: [
-        { id: "c-test-m1", name: "Court 1" },
-        { id: "c-test-m2", name: "Court 2" },
-        { id: "c-test-m3", name: "Court 3" },
-        { id: "c-test-m4", name: "Court 4" }
+        { id: "c-test-m1", label: "Court 1" },
+        { id: "c-test-m2", label: "Court 2" },
+        { id: "c-test-m3", label: "Court 3" },
+        { id: "c-test-m4", label: "Court 4" }
       ]
     };
     var venueNorth = {
       id: "v-test-north",
       name: "North Gymnasium",
       courts: [
-        { id: "c-test-na", name: "Court A" },
-        { id: "c-test-nb", name: "Court B" }
+        { id: "c-test-na", label: "Court A" },
+        { id: "c-test-nb", label: "Court B" }
       ]
     };
     newState.venues.push(venueMain, venueNorth);
 
     // Divisions
     var divisions = [
-      { id: "d-test-14g", name: "14U Girls",  format: "bo3"  },
-      { id: "d-test-16g", name: "16U Girls",  format: "bo3"  },
-      { id: "d-test-18b", name: "18U Boys",   format: "2s25" },
-      { id: "d-test-om",  name: "Open Mixed", format: "2s25" }
+      { id: "d-test-14g", name: "14U Girls",  formatId: "bo3"  },
+      { id: "d-test-16g", name: "16U Girls",  formatId: "bo3"  },
+      { id: "d-test-18b", name: "18U Boys",   formatId: "2s25" },
+      { id: "d-test-om",  name: "Open Mixed", formatId: "2s25" }
     ];
     divisions.forEach(function (d) { newState.divisions.push(d); });
 
@@ -1747,15 +1750,23 @@
       });
     });
 
-    // Matches — round-robin per division, assigned to venues
-    // 14U & 18U → Main Sports Center (4 courts); 16U & Open → North Gymnasium (2 courts)
-    var venueForDiv = [venueMain, venueNorth, venueMain, venueNorth];
+    // Matches — round-robin per division, one dedicated court each (sequential).
+    // Main Sports Center: 14U Girls → Court 1, 16U Girls → Court 2
+    // North Gymnasium:    18U Boys  → Court A, Open Mixed → Court B
+    // Sequential scheduling means only 2 teams are ever busy at the same time
+    // within a division, keeping the other 2 free for work duties.
+    var divCourtMap = [
+      { venue: venueMain,  court: venueMain.courts[0]  },
+      { venue: venueMain,  court: venueMain.courts[1]  },
+      { venue: venueNorth, court: venueNorth.courts[0] },
+      { venue: venueNorth, court: venueNorth.courts[1] }
+    ];
     var slotMs = (45 + 10) * 60000;
     var base8am = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8, 0, 0);
 
     divisions.forEach(function (div, divIndex) {
       var teams = teamGroups[divIndex];
-      var venue = venueForDiv[divIndex];
+      var assign = divCourtMap[divIndex];
       var pairs = [];
       var i, j;
       for (i = 0; i < teams.length; i += 1) {
@@ -1764,9 +1775,7 @@
         }
       }
       pairs.forEach(function (pair, idx) {
-        var court = venue.courts[idx % venue.courts.length];
-        var wave = Math.floor(idx / venue.courts.length);
-        var start = new Date(base8am.getTime() + wave * slotMs);
+        var start = new Date(base8am.getTime() + idx * slotMs);
         newState.matches.push({
           id: "m-test-" + div.id + "-" + idx,
           divisionId: div.id,
@@ -1774,8 +1783,8 @@
           roundNumber: idx + 1,
           teamAId: pair[0].id,
           teamBId: pair[1].id,
-          venueId: venue.id,
-          courtId: court.id,
+          venueId: assign.venue.id,
+          courtId: assign.court.id,
           startTime: start.toISOString(),
           durationMinutes: 45,
           status: "scheduled",
@@ -1789,16 +1798,25 @@
       });
     });
 
-    // Work teams — rotate non-playing team per match
+    // Work teams — only assign teams not playing in the same time slot
     divisions.forEach(function (div, divIndex) {
       var teams = teamGroups[divIndex];
       var ids = teams.map(function (t) { return t.id; });
       var divMatches = newState.matches.filter(function (m) { return m.divisionId === div.id; });
-      divMatches.forEach(function (match, idx) {
-        var notPlaying = ids.filter(function (tid) {
-          return tid !== match.teamAId && tid !== match.teamBId;
+      divMatches.forEach(function (match) {
+        var slot = match.startTime || ("round-" + match.roundNumber);
+        var busyIds = {};
+        divMatches.forEach(function (m) {
+          if ((m.startTime || ("round-" + m.roundNumber)) === slot) {
+            busyIds[m.teamAId] = true;
+            busyIds[m.teamBId] = true;
+          }
         });
-        match.workTeamId = notPlaying[idx % notPlaying.length] || null;
+        var eligible = ids.filter(function (tid) { return !busyIds[tid]; });
+        if (eligible.length) {
+          var mIdx = divMatches.indexOf(match);
+          match.workTeamId = eligible[mIdx % eligible.length];
+        }
       });
     });
 
