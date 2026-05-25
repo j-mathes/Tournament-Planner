@@ -64,6 +64,11 @@ It is designed to:
   - Final results summary on the Standings view — shows division champion (from completed bracket) and ranked standings
   - Division-specific bracket JSON export
   - Division-specific bracket JSON import
+- Admin panel
+  - Dashboard alerts — color-coded warnings for in-progress matches, missing work teams, work conflicts, and locked matches
+  - Division status table — per-division view of pools/bracket generation state, match completion progress, and champion
+  - Match locking — lock any match to prevent score edits, assignment changes, and forfeit actions; unlock at any time
+  - Forfeit support — mark a match as forfeited by selecting the forfeiting team; winner is set automatically and bracket progression triggers
 - Standings
   - Ranking by wins
   - Tiebreakers by set ratio, then point ratio

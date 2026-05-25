@@ -50,6 +50,7 @@
   var ui = {};
   var assignmentEditMatchId = null;
   var workEditMatchId = null;
+  var forfeitMatchId = null;
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -86,6 +87,8 @@
     ui.tournamentEnd = document.getElementById("tournament-end");
     ui.resetData = document.getElementById("reset-data");
     ui.dashboardStats = document.getElementById("dashboard-stats");
+    ui.adminAlerts = document.getElementById("admin-alerts");
+    ui.divisionStatusBoard = document.getElementById("division-status-board");
     ui.exportJson = document.getElementById("export-json");
     ui.importJson = document.getElementById("import-json");
 
@@ -1143,12 +1146,38 @@
       return;
     }
 
-    var scoreForm = event.target.closest("form.score-form");
-    if (!scoreForm) {
+    var forfeitForm = event.target.closest("form.forfeit-form");
+    if (forfeitForm) {
+      handleForfeitSubmit(event, forfeitForm);
       return;
     }
 
+    var scoreForm = event.target.closest("form.score-form");
+    if (!scoreForm) { return; }
     handleScoreSubmit(event, scoreForm);
+  }
+
+  function handleForfeitSubmit(event, form) {
+    event.preventDefault();
+    var matchId = form.getAttribute("data-match-id");
+    var match = state.matches.find(function (m) { return m.id === matchId; });
+    if (!match) { return; }
+
+    var forfeitingTeamId = form.querySelector("select[name='forfeitTeam']").value;
+    if (!forfeitingTeamId) { return; }
+
+    match.winnerId = (forfeitingTeamId === match.teamAId) ? match.teamBId : match.teamAId;
+    match.loserId = forfeitingTeamId;
+    match.status = "completed";
+    match.forfeited = true;
+    match.setScores = [];
+    forfeitMatchId = null;
+
+    if (match.stage === "bracket") {
+      recomputeBracketProgression(match.divisionId);
+    }
+    saveState();
+    renderAll();
   }
 
   function handleScoreSubmit(event, form) {
@@ -1245,37 +1274,30 @@
 
   function handleMatchActions(event) {
     var button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
+    if (!button) { return; }
 
     var action = button.getAttribute("data-action");
-    var workActions = ["edit-work-team", "clear-work-team", "cancel-work-team"];
-    var assignActions = ["clear-score", "edit-assignment", "clear-assignment", "cancel-assignment"];
-    if (assignActions.indexOf(action) === -1 && workActions.indexOf(action) === -1) {
-      return;
-    }
+    var knownActions = [
+      "clear-score", "edit-assignment", "clear-assignment", "cancel-assignment",
+      "edit-work-team", "clear-work-team", "cancel-work-team",
+      "lock-match", "unlock-match", "forfeit-match", "cancel-forfeit"
+    ];
+    if (knownActions.indexOf(action) === -1) { return; }
 
     var matchId = button.getAttribute("data-match-id");
-    var match = state.matches.find(function (item) {
-      return item.id === matchId;
-    });
-    if (!match) {
-      return;
-    }
+    var match = state.matches.find(function (item) { return item.id === matchId; });
+    if (!match) { return; }
 
     if (action === "edit-assignment") {
       assignmentEditMatchId = match.id;
       renderMatches();
       return;
     }
-
     if (action === "cancel-assignment") {
       assignmentEditMatchId = null;
       renderMatches();
       return;
     }
-
     if (action === "clear-assignment") {
       match.venueId = null;
       match.courtId = null;
@@ -1285,19 +1307,16 @@
       renderAll();
       return;
     }
-
     if (action === "edit-work-team") {
       workEditMatchId = match.id;
       renderMatches();
       return;
     }
-
     if (action === "cancel-work-team") {
       workEditMatchId = null;
       renderMatches();
       return;
     }
-
     if (action === "clear-work-team") {
       match.workTeamId = null;
       workEditMatchId = null;
@@ -1305,34 +1324,40 @@
       renderAll();
       return;
     }
-
+    if (action === "lock-match") {
+      match.locked = true;
+      saveState();
+      renderMatches();
+      renderDashboardStats();
+      return;
+    }
+    if (action === "unlock-match") {
+      match.locked = false;
+      saveState();
+      renderMatches();
+      renderDashboardStats();
+      return;
+    }
+    if (action === "forfeit-match") {
+      forfeitMatchId = match.id;
+      renderMatches();
+      return;
+    }
+    if (action === "cancel-forfeit") {
+      forfeitMatchId = null;
+      renderMatches();
+      return;
+    }
+    // clear-score: reset match scores and status
     match.setScores = [];
     match.winnerId = null;
     match.loserId = null;
     match.status = "scheduled";
     if (match.stage === "bracket") {
       recomputeBracketProgression(match.divisionId);
-        if (action === "edit-work-team") {
-          workEditMatchId = match.id;
-          renderMatches();
-          return;
-        }
     }
-        if (action === "cancel-work-team") {
-          workEditMatchId = null;
-          renderMatches();
-          return;
-        }
     saveState();
-        if (action === "clear-work-team") {
-          match.workTeamId = null;
-          workEditMatchId = null;
-          saveState();
-          renderMatches();
-          return;
-        }
     renderAll();
-        // clear-score falls through to here
   }
 
   function handleMatchTableChange(event) {
@@ -1521,7 +1546,7 @@
           "<td>" + escapeHtml(division ? division.name : "-") + "</td>" +
           "<td>" + escapeHtml(venue ? venue.name : "-") + "</td>" +
           "<td>" + escapeHtml(court ? court.label : "-") + "</td>" +
-          "<td>" + renderStatusTag(match.status) + "</td>" +
+          "<td>" + renderStatusTag(match.status, match) + "</td>" +
           "<td>" + roleCell + "</td>" +
           "</tr>";
       })
@@ -1548,6 +1573,101 @@
     ].join("");
 
     ui.dashboardStats.innerHTML = html;
+    renderAdminAlerts();
+    renderDivisionStatus();
+  }
+
+  function renderAdminAlerts() {
+    if (!ui.adminAlerts) { return; }
+    var alerts = [];
+
+    var inProgress = state.matches.filter(function (m) { return m.status === "in_progress"; }).length;
+    if (inProgress) {
+      alerts.push({ level: "info", text: inProgress + " match" + (inProgress === 1 ? "" : "es") + " currently in progress." });
+    }
+
+    var missingWork = state.matches.filter(function (m) {
+      return m.status === "scheduled" && m.venueId && !m.workTeamId;
+    }).length;
+    if (missingWork) {
+      alerts.push({ level: "warn", text: missingWork + " assigned match" + (missingWork === 1 ? "" : "es") + " missing a work team." });
+    }
+
+    var conflicts = [];
+    state.divisions.forEach(function (div) {
+      conflicts = conflicts.concat(computeWorkConflicts(div.id));
+    });
+    if (conflicts.length) {
+      alerts.push({ level: "error", text: conflicts.length + " work assignment conflict" + (conflicts.length === 1 ? "" : "s") + " detected." });
+    }
+
+    var locked = state.matches.filter(function (m) { return m.locked; }).length;
+    if (locked) {
+      alerts.push({ level: "info", text: locked + " match" + (locked === 1 ? "" : "es") + " locked against edits." });
+    }
+
+    if (!alerts.length) {
+      ui.adminAlerts.innerHTML = "";
+      return;
+    }
+
+    ui.adminAlerts.innerHTML = "<h3 style='margin:0 0 0.6rem'>Alerts</h3>" +
+      alerts.map(function (a) {
+        return "<div class='admin-alert admin-alert-" + a.level + "'>" + escapeHtml(a.text) + "</div>";
+      }).join("");
+  }
+
+  function renderDivisionStatus() {
+    if (!ui.divisionStatusBoard) { return; }
+    if (!state.divisions.length) {
+      ui.divisionStatusBoard.innerHTML = "";
+      return;
+    }
+
+    var rows = state.divisions.map(function (div) {
+      var teams = getDivisionTeams(div.id);
+      var allMatches = state.matches.filter(function (m) { return m.divisionId === div.id; });
+      var poolMatches = allMatches.filter(function (m) { return m.stage === "pool"; });
+      var bracketMatches = allMatches.filter(function (m) { return m.stage === "bracket"; });
+      var completedAll = allMatches.filter(function (m) { return m.status === "completed"; }).length;
+
+      var poolsGenerated = poolMatches.length > 0;
+      var bracketGenerated = bracketMatches.length > 0;
+
+      var champion = null;
+      if (bracketMatches.length) {
+        var rounds = groupBracketRounds(bracketMatches);
+        var roundNumbers = Object.keys(rounds).map(function (k) { return parseInt(k, 10); }).sort(function (a, b) { return a - b; });
+        var finalRound = rounds[roundNumbers[roundNumbers.length - 1]] || [];
+        if (finalRound.length === 1 && finalRound[0].winnerId) {
+          champion = findTeam(finalRound[0].winnerId);
+        }
+      }
+
+      var statusLabel = "Setup";
+      if (champion) { statusLabel = "Complete"; }
+      else if (bracketMatches.some(function (m) { return m.status !== "scheduled"; })) { statusLabel = "Bracket Play"; }
+      else if (bracketGenerated) { statusLabel = "Bracket Ready"; }
+      else if (poolMatches.some(function (m) { return m.status !== "scheduled"; })) { statusLabel = "Pool Play"; }
+      else if (poolsGenerated) { statusLabel = "Pools Ready"; }
+      else if (teams.length > 0) { statusLabel = "Teams Added"; }
+
+      return "<tr>" +
+        "<td><strong>" + escapeHtml(div.name) + "</strong></td>" +
+        "<td>" + teams.length + "</td>" +
+        "<td>" + (poolsGenerated ? "\u2713" : "\u2014") + "</td>" +
+        "<td>" + (bracketGenerated ? "\u2713" : "\u2014") + "</td>" +
+        "<td>" + (allMatches.length ? (completedAll + "/" + allMatches.length) : "\u2014") + "</td>" +
+        "<td><span class='tag" + (champion ? " complete" : "") + "'>" + escapeHtml(statusLabel) + "</span></td>" +
+        "<td>" + (champion ? "<strong>" + escapeHtml(champion.name) + "</strong>" : "\u2014") + "</td>" +
+        "</tr>";
+    }).join("");
+
+    ui.divisionStatusBoard.innerHTML =
+      "<h3 style='margin:0 0 0.6rem'>Division Status</h3>" +
+      "<table><thead><tr>" +
+      "<th>Division</th><th>Teams</th><th>Pools</th><th>Bracket</th><th>Matches</th><th>Status</th><th>Champion</th>" +
+      "</tr></thead><tbody>" + rows + "</tbody></table>";
   }
 
   function renderDivisions() {
@@ -1639,12 +1759,12 @@
 
         return "<tr>" +
           "<td><strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong><br><small>" + escapeHtml(getMatchPhaseLabel(match)) + "</small></td>" +
-          "<td>" + renderStatusTag(match.status) + "</td>" +
+          "<td>" + renderStatusTag(match.status, match) + "</td>" +
           "<td>" + renderAssignment(match) + (hasConflict ? renderConflictBadge() : "") + "</td>" +
           "<td>" + renderSetSummary(match) + "</td>" +
           "<td>" + escapeHtml(winner ? winner.name : "-") + "</td>" +
           "<td class=\"match-work-col no-print\">" + renderWorkActions(match) + "</td>" +
-          "<td class=\"match-update-col\">" + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
+          "<td class=\"match-update-col\">" + renderAdminActions(match) + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
           "</tr>";
       })
       .join("");
@@ -1901,6 +2021,9 @@
   }
 
   function renderAssignmentActions(match) {
+    if (match.locked) {
+      return "<div class='locked-notice'><span class='tag'>\uD83D\uDD12 Locked</span></div>";
+    }
     var isEditing = assignmentEditMatchId === match.id;
     var assignLabel = isEditing ? "Editing..." : (match.venueId && match.courtId ? "Edit Assignment" : "Assign");
 
@@ -1935,6 +2058,38 @@
       "<button type=\"submit\">Save Assignment</button>" +
       "<button type=\"button\" class=\"secondary\" data-action=\"cancel-assignment\" data-match-id=\"" + escapeHtml(match.id) + "\">Cancel</button>" +
       "</form>";
+  }
+
+  function renderAdminActions(match) {
+    var lockAction = match.locked ? "unlock-match" : "lock-match";
+    var lockLabel = match.locked ? "\uD83D\uDD13 Unlock" : "\uD83D\uDD12 Lock";
+    var lockClass = match.locked ? "secondary" : "secondary";
+
+    var html = "<div class='admin-actions'>" +
+      "<button type='button' class='" + lockClass + "' data-action='" + lockAction + "' data-match-id='" + escapeHtml(match.id) + "'>" + lockLabel + "</button>";
+
+    var canForfeit = !match.locked && match.status !== "completed" && (match.teamAId || match.teamBId);
+    if (canForfeit) {
+      if (forfeitMatchId === match.id) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        html += "<form class='forfeit-form' data-match-id='" + escapeHtml(match.id) + "'>" +
+          "<label>Forfeiting team:" +
+          "<select name='forfeitTeam' required>" +
+          "<option value=''>Select...</option>" +
+          (teamA ? "<option value='" + escapeHtml(match.teamAId) + "'>" + escapeHtml(teamA.name) + "</option>" : "") +
+          (teamB ? "<option value='" + escapeHtml(match.teamBId) + "'>" + escapeHtml(teamB.name) + "</option>" : "") +
+          "</select></label>" +
+          "<button type='submit'>Confirm Forfeit</button>" +
+          "<button type='button' class='secondary' data-action='cancel-forfeit' data-match-id='" + escapeHtml(match.id) + "'>Cancel</button>" +
+          "</form>";
+      } else {
+        html += " <button type='button' class='secondary' data-action='forfeit-match' data-match-id='" + escapeHtml(match.id) + "'>Forfeit</button>";
+      }
+    }
+
+    html += "</div>";
+    return html;
   }
 
   function renderStandings() {
@@ -2849,9 +3004,12 @@
     return stageLabel + " Round " + match.roundNumber;
   }
 
-  function renderStatusTag(status) {
+  function renderStatusTag(status, match) {
     var css = status === "completed" ? "tag complete" : "tag";
-    return "<span class=\"" + css + "\">" + escapeHtml(status) + "</span>";
+    var extra = "";
+    if (match && match.forfeited) { extra += " <span class='tag warning'>forfeit</span>"; }
+    if (match && match.locked) { extra += " <span class='tag'>\uD83D\uDD12</span>"; }
+    return "<span class=\"" + css + "\">" + escapeHtml(status) + "</span>" + extra;
   }
 
   function renderSetSummary(match) {
@@ -2877,6 +3035,8 @@
   }
 
   function renderScoreForm(match) {
+    if (match.locked) { return ""; }
+
     var values = { s1: "", s2: "", s3: "" };
     match.setScores.forEach(function (set, index) {
       var key = "s" + (index + 1);
