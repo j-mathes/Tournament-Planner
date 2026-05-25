@@ -1,314 +1,125 @@
-\# AGENT\_INSTRUCTIONS.md  
+# AGENT_INSTRUCTIONS.md
 
-\### AI Development Rules for the Tournament Planner Project
+### AI Development Rules for the Tournament Planner Project
 
+This file defines how any AI agent must behave when working on the **Tournament Planner** application.
+These instructions are mandatory and override default behavior.
 
+---
 
-This file defines how any AI agent must behave when working on the \*\*Tournament Planner\*\* application.  
+# 1. Project Overview
 
-These instructions are mandatory and override all default behavior.  
-
-The agent must follow this document \*\*before generating any code, documentation, or architectural decisions\*\*.
-
-
-
-\---
-
-
-
-\# 1. Project Overview
-
-
-
-Build a \*\*browser‑based tournament organizer / creator app\*\* called \*\*Tournament Planner\*\*.
-
-
+Build a **browser-based tournament organizer app** called **Tournament Planner**.
 
 The app must:
 
+- Run as a **static web app** (no backend services, no build step)
+- Work when opened directly in a browser or hosted on GitHub Pages
+- Prioritize simplicity and maintainability over feature depth
+- Use **vanilla JavaScript (ES6+, "use strict")** by default
+- Use **localStorage** as primary persistence
+- Use **IndexedDB** only when data volume requires it
+- Use a **multi-view layout** simulated in the browser
+- Be fully **responsive** (desktop, tablet, mobile)
+- Follow the specification suite in `/Specifications`
 
+This project should remain framework-free and build-step-free unless the user explicitly requests otherwise.
 
-\- Run as a \*\*static web app\*\* (no backend, no build step)  
+---
 
-\- Use exactly three files: \*\*index.html\*\*, \*\*app.js\*\*, \*\*styles.css\*\*  
+# 2. Specification Requirements
 
-\- Work when opened directly in a browser or hosted on GitHub Pages  
+Before implementing major features, the AI should:
 
-\- Use \*\*vanilla JavaScript (ES6+, "use strict")\*\*  
+1. Read `Specifications/00_MASTER_INDEX.md`
+2. Read relevant specification files in `/Specifications` (01-16)
+3. Ask clarifying questions only when there is material ambiguity
+4. Avoid assumptions that would change behavior or scope
+5. Keep implementation aligned with user priorities
 
-\- Use \*\*localStorage\*\* as primary persistence  
+If a conflict exists between older documentation and explicit user direction, update documentation first, then implement.
 
-\- Use \*\*IndexedDB\*\* as a fallback for large data  
+---
 
-\- Use a \*\*multi‑page layout\*\* simulated via DOM swapping  
-
-\- Be fully \*\*responsive\*\* (desktop, iPad, iPhone)  
-
-\- Keep \*\*all logic in app.js\*\*  
-
-\- Follow the \*\*full specification suite\*\* in `/Specifications`  
-
-\- Ask clarifying questions before implementing anything unclear  
-
-
-
-This project must remain framework‑free and build‑step‑free.
-
-
-
-\---
-
-
-
-\# 2. Specification Requirements
-
-
-
-Before implementing anything, the AI must:
-
-
-
-1\. Read `Specifications/00\_MASTER\_INDEX.md`  
-
-2\. Read \*\*all referenced specification files\*\* (01–16)  
-
-3\. Ask clarifying questions if anything is ambiguous  
-
-4\. Assume nothing  
-
-5\. Follow the specifications exactly  
-
-
-
-The specification suite defines:
-
-
-
-\- Data models  
-
-\- Engines  
-
-\- Scheduling logic  
-
-\- Standings logic  
-
-\- Bracket logic  
-
-\- Match formats  
-
-\- Officiating/work assignment logic  
-
-\- Printing/exporting  
-
-\- Public display engine  
-
-\- Permissions  
-
-\- System architecture  
-
-
-
-These files are \*\*authoritative\*\*.  
-
-If a conflict exists, the specification suite wins.
-
-
-
-\---
-
-
-
-\# 3. Implementation Rules
-
-
+# 3. Implementation Rules
 
 The AI must:
 
-
-
-\- Use \*\*no frameworks\*\*  
-
-\- Use \*\*no build tools\*\*  
-
-\- Use \*\*no external dependencies\*\*  
-
-\- Keep all logic in \*\*app.js\*\*  
-
-\- Use \*\*modular patterns inside app.js\*\* (namespaces, closures, IIFE, etc.)  
-
-\- Use \*\*semantic HTML\*\*  
-
-\- Use \*\*CSS only\*\* (no preprocessors)  
-
-\- Use \*\*event delegation\*\* for UI interactions  
-
-\- Use \*\*progressive enhancement\*\*  
-
-\- Use \*\*defensive programming\*\*  
-
-\- Use \*\*strict mode\*\*  
-
-
+- Keep the app browser-only (no server runtime required)
+- Use no build tools
+- Prefer no external dependencies
+- Keep architecture client-side and modular
+- Use semantic HTML
+- Use CSS only (no preprocessors)
+- Use event delegation where practical
+- Use progressive enhancement
+- Use defensive programming
+- Use strict mode in JavaScript
 
 The AI must not:
 
+- Introduce backend services or deployment dependencies
+- Introduce bundlers or required compile steps
+- Invent features not requested by user or specifications
 
+---
 
-\- Introduce new files beyond index.html, app.js, styles.css, and documentation  
+# 4. UI Requirements
 
-\- Introduce new libraries  
+The app should include:
 
-\- Introduce bundlers or build steps  
+- A top navigation area
+- Multiple screens/views swapped in browser
+- Clean, mobile-friendly layout
+- Admin-oriented workflows
+- Public-display oriented workflows
 
-\- Invent features not in the specifications  
+All UI should be accessible and responsive.
 
+---
 
+# 5. Development Workflow
 
-\---
+When implementing or modifying code:
 
+1. Re-read relevant specification files
+2. Clarify only unresolved, high-impact ambiguity
+3. Implement the simplest valid solution first
+4. Explain architecture decisions briefly
+5. Keep docs aligned with implementation reality
 
+---
 
-\# 4. UI Requirements
+# 6. Documentation Requirements
 
+The AI should maintain:
 
+- A clear README
+- Updated specifications when direction changes
+- Short architectural notes for key decisions
+- Inline comments only where needed for clarity
 
-The app must include:
+---
 
+# 7. License Requirements
 
+All generated work must include the following license header when required by project policy:
 
-\- A top navigation bar  
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License
+Copyright (c) 2026 Jared Mathes
 
-\- Multiple “views” (screens) swapped via JavaScript  
-
-\- A clean, mobile‑friendly layout  
-
-\- Printable views where required  
-
-\- Public display modes  
-
-\- Admin panel modes  
-
-
-
-All UI must be accessible and responsive.
-
-
-
-\---
-
-
-
-\# 5. Development Workflow
-
-
-
-When the AI is asked to implement or modify code:
-
-
-
-1\. Re‑read relevant specification files  
-
-2\. Ask clarifying questions if needed  
-
-3\. Produce code that strictly follows the specs  
-
-4\. Explain architectural decisions  
-
-5\. Never assume missing details  
-
-6\. Never invent features not in the specs  
-
-
-
-If the user asks for something outside the spec, the AI must ask whether the spec should be updated.
-
-
-
-\---
-
-
-
-\# 6. Documentation Requirements
-
-
-
-The AI must generate:
-
-
-
-\- A comprehensive README  
-
-\- Additional documentation as needed  
-
-\- Clear explanations of architecture and design  
-
-\- Inline comments in code where appropriate  
-
-
-
-Documentation must be consistent with the specification suite.
-
-
-
-\---
-
-
-
-\# 7. License Requirements
-
-
-
-All generated work must include the following license header:
-
-
-
-Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License  
-
-Copyright (c) 2026 Jared Mathes  
-
-
-
-To view a copy of this license, visit:  
-
+To view a copy of this license, visit:
 http://creativecommons.org/licenses/by-nc-sa/4.0/
 
-
-
-Or send a letter to:  
-
+Or send a letter to:
 Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
 
+---
 
+# 8. If Unclear
 
-\---
+If unclear about critical behavior, the AI must ask for clarification before implementing that behavior.
 
+---
 
-
-\# 8. If Unclear
-
-
-
-If the AI is unclear about \*\*anything\*\*, it must:
-
-
-
-\- Ask questions  
-
-\- Request clarification  
-
-\- Never proceed with assumptions  
-
-
-
-This rule is absolute.
-
-
-
-\---
-
-
-
-\# End of File
-
-
-
+# End of File
