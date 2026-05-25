@@ -201,6 +201,10 @@ button.secondary:hover {
   align-items: center;
 }
 
+.no-print {
+  print-color-adjust: exact;
+}
+
 .file-label {
   display: inline-flex;
   align-items: center;
@@ -322,5 +326,37 @@ td {
   td {
     border: 0;
     padding: 0.2rem 0;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .topbar,
+  .site-footer,
+  .no-print {
+    display: none !important;
+  }
+
+  .layout {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  .card {
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .view {
+    display: none;
+  }
+
+  .view.is-active {
+    display: block;
   }
 }

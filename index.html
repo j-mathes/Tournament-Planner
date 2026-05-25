@@ -16,6 +16,7 @@
         <button class="nav-btn is-active" data-view="dashboard">Dashboard</button>
         <button class="nav-btn" data-view="divisions">Divisions</button>
         <button class="nav-btn" data-view="teams">Teams</button>
+        <button class="nav-btn" data-view="venues">Venues</button>
         <button class="nav-btn" data-view="matches">Matches</button>
         <button class="nav-btn" data-view="standings">Standings</button>
         <button class="nav-btn" data-view="public">Public Display</button>
@@ -130,12 +131,53 @@
 
       <section class="view" id="view-matches" aria-labelledby="matches-title">
         <h2 id="matches-title">Matches</h2>
-        <section class="card split-actions">
+        <section class="card split-actions no-print">
           <label>
             Division
             <select id="match-division"></select>
           </label>
           <button id="generate-round-robin" type="button">Generate Round Robin</button>
+        </section>
+        <section class="card form-grid no-print" aria-label="Schedule Controls">
+          <label>
+            Assign Venue
+            <select id="schedule-venue"></select>
+          </label>
+          <label>
+            Start Time
+            <input type="datetime-local" id="schedule-start-time">
+          </label>
+          <label>
+            Match Minutes
+            <input type="number" id="schedule-slot-minutes" min="10" step="1" value="45">
+          </label>
+          <label>
+            Break Minutes
+            <input type="number" id="schedule-break-minutes" min="0" step="1" value="10">
+          </label>
+          <div class="form-actions">
+            <button id="auto-assign-schedule" type="button">Auto Assign Courts/Times</button>
+            <button id="print-schedule" type="button" class="secondary">Print Schedule</button>
+          </div>
+        </section>
+        <section class="card form-grid no-print" aria-label="Match Filters">
+          <label>
+            Filter Venue
+            <select id="match-venue-filter"></select>
+          </label>
+          <label>
+            Filter Court
+            <select id="match-court-filter"></select>
+          </label>
+          <label>
+            Filter Status
+            <select id="match-status-filter">
+              <option value="">All statuses</option>
+              <option value="scheduled">scheduled</option>
+              <option value="in_progress">in_progress</option>
+              <option value="completed">completed</option>
+            </select>
+          </label>
         </section>
         <div class="card">
           <table>
@@ -143,12 +185,44 @@
               <tr>
                 <th>Match</th>
                 <th>Status</th>
+                <th>Assignment</th>
                 <th>Sets</th>
                 <th>Winner</th>
                 <th>Update</th>
               </tr>
             </thead>
             <tbody id="match-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-venues" aria-labelledby="venues-title">
+        <h2 id="venues-title">Venues & Courts</h2>
+        <form id="venue-form" class="card form-grid">
+          <input type="hidden" id="venue-edit-id" value="">
+          <label>
+            Venue Name
+            <input type="text" id="venue-name" required maxlength="120" placeholder="Example: Main Sports Center">
+          </label>
+          <label>
+            Courts (comma separated)
+            <input type="text" id="venue-courts" required maxlength="300" placeholder="Court 1, Court 2, Court 3">
+          </label>
+          <div class="form-actions">
+            <button type="submit" id="venue-submit-btn">Add Venue</button>
+            <button type="button" id="venue-cancel-edit" class="secondary" hidden>Cancel</button>
+          </div>
+        </form>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Venue</th>
+                <th>Courts</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="venue-table-body"></tbody>
           </table>
         </div>
       </section>
