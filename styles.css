@@ -308,6 +308,14 @@ td {
   flex-wrap: wrap;
 }
 
+.score-format-label {
+  display: block;
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
 .match-actions {
   margin-bottom: 0.35rem;
   display: flex;

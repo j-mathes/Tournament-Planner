@@ -70,6 +70,16 @@
             Division Name
             <input type="text" id="division-name" required maxlength="80" placeholder="Example: 16U Girls">
           </label>
+          <label>
+            Match Format
+            <select id="division-format">
+              <option value="">No format</option>
+              <option value="bo3">Best of 3 (25/25/15)</option>
+              <option value="bo5">Best of 5 (25/25/25/25/15)</option>
+              <option value="2s25">Two Sets to 25</option>
+              <option value="1s25">Single Set to 25</option>
+            </select>
+          </label>
           <button type="submit" id="division-submit-btn">Add Division</button>
           <button type="button" id="division-cancel-edit" class="secondary" hidden>Cancel</button>
         </form>
@@ -78,6 +88,7 @@
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Format</th>
                 <th>Teams</th>
                 <th>Actions</th>
               </tr>

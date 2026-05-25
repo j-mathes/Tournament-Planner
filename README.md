@@ -50,6 +50,12 @@ It is designed to:
   - Manual override with inline team picker per match
   - Work conflict warnings when a team is both playing and working in the same slot
   - Team schedule view shows both playing and working entries with role badge
+- Match formats
+  - Predefined volleyball formats: Best of 3 (25/25/15), Best of 5, Two Sets to 25, Single Set to 25
+  - Format assigned per division
+  - Score entry form shows correct number of set inputs and placeholders for the format
+  - Soft score validation warns if set scores don't match format rules (target points, win-by-two, cap)
+  - Auto-scheduling uses format duration when no manual duration is set
   - Division-specific bracket JSON export
   - Division-specific bracket JSON import
 - Standings

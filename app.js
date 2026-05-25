@@ -3,6 +3,48 @@
 
   var STORAGE_KEY = "tp.static.v1";
   var DEFAULT_MATCH_MINUTES = 45;
+  var MATCH_FORMATS = [
+    {
+      id: "bo3",
+      name: "Best of 3 (25/25/15)",
+      setsToWin: 2,
+      setPoints: [25, 25, 15],
+      winByTwo: true,
+      capPoints: 27,
+      decidingSetCap: 17,
+      durationMinutes: 60
+    },
+    {
+      id: "bo5",
+      name: "Best of 5 (25/25/25/25/15)",
+      setsToWin: 3,
+      setPoints: [25, 25, 25, 25, 15],
+      winByTwo: true,
+      capPoints: 27,
+      decidingSetCap: 17,
+      durationMinutes: 90
+    },
+    {
+      id: "2s25",
+      name: "Two Sets to 25",
+      setsToWin: 2,
+      setPoints: [25, 25],
+      winByTwo: true,
+      capPoints: 27,
+      decidingSetCap: null,
+      durationMinutes: 45
+    },
+    {
+      id: "1s25",
+      name: "Single Set to 25",
+      setsToWin: 1,
+      setPoints: [25],
+      winByTwo: true,
+      capPoints: 27,
+      decidingSetCap: null,
+      durationMinutes: 30
+    }
+  ];
 
   var state = createEmptyState();
   var ui = {};
@@ -50,6 +92,7 @@
     ui.divisionForm = document.getElementById("division-form");
     ui.divisionEditId = document.getElementById("division-edit-id");
     ui.divisionName = document.getElementById("division-name");
+    ui.divisionFormat = document.getElementById("division-format");
     ui.divisionSubmitBtn = document.getElementById("division-submit-btn");
     ui.divisionCancelEdit = document.getElementById("division-cancel-edit");
     ui.divisionTableBody = document.getElementById("division-table-body");
@@ -1256,8 +1299,10 @@
     ui.divisionTableBody.innerHTML = state.divisions
       .map(function (division) {
         var count = getDivisionTeams(division.id).length;
+        var fmt = findMatchFormat(division.formatId);
         return "<tr>" +
           "<td>" + escapeHtml(division.name) + "</td>" +
+          "<td>" + escapeHtml(fmt ? fmt.name : "\u2014") + "</td>" +
           "<td>" + count + "</td>" +
           "<td>" +
           "<button type=\"button\" data-action=\"edit\" data-division-id=\"" + escapeHtml(division.id) + "\">Edit</button> " +
@@ -1435,6 +1480,45 @@
     return firstStart < secondEnd && secondStart < firstEnd;
   }
 
+  function findMatchFormat(formatId) {
+    if (!formatId) { return null; }
+    return MATCH_FORMATS.filter(function (f) { return f.id === formatId; })[0] || null;
+  }
+
+  function getFormatForMatch(match) {
+    var division = findDivision(match.divisionId);
+    return division ? findMatchFormat(division.formatId) : null;
+  }
+
+  function getMaxSets(fmt) {
+    if (!fmt) { return 3; }
+    return fmt.setsToWin * 2 - 1;
+  }
+
+  function validateSetScores(sets, fmt) {
+    if (!fmt || !sets.length) { return []; }
+    var warnings = [];
+    var maxSets = getMaxSets(fmt);
+    if (sets.length > maxSets) {
+      warnings.push("More sets entered (" + sets.length + ") than the format allows (" + maxSets + ").");
+    }
+    sets.forEach(function (set, i) {
+      var target = i < fmt.setPoints.length ? fmt.setPoints[i] : fmt.setPoints[fmt.setPoints.length - 1];
+      var cap = (i === fmt.setPoints.length - 1 && fmt.decidingSetCap) ? fmt.decidingSetCap : fmt.capPoints;
+      var hi = Math.max(set.teamAScore, set.teamBScore);
+      var lo = Math.min(set.teamAScore, set.teamBScore);
+      if (hi < target) {
+        warnings.push("Set " + (i + 1) + ": winning score " + hi + " is below the target of " + target + ".");
+      }
+      if (cap && hi > cap) {
+        warnings.push("Set " + (i + 1) + ": score " + hi + " exceeds the cap of " + cap + ".");
+      }
+      if (fmt.winByTwo && hi >= target && (hi - lo) < 2 && !(cap && hi >= cap)) {
+        warnings.push("Set " + (i + 1) + ": score " + set.teamAScore + "-" + set.teamBScore + " does not satisfy win-by-two.");
+      }
+    });
+    return warnings;
+  }
   function getMatchDurationMinutes(match) {
     if (Number.isFinite(match.durationMinutes) && match.durationMinutes > 0) {
       return match.durationMinutes;
