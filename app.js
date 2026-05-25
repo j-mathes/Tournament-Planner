@@ -88,6 +88,9 @@
     ui.printMetaMatches = document.getElementById("print-meta-matches");
     ui.bracketDivision = document.getElementById("bracket-division");
     ui.generateBracket = document.getElementById("generate-bracket");
+    ui.printBracket = document.getElementById("print-bracket");
+    ui.exportBracket = document.getElementById("export-bracket");
+    ui.printMetaBrackets = document.getElementById("print-meta-brackets");
     ui.bracketBoard = document.getElementById("bracket-board");
 
     ui.teamScheduleTeam = document.getElementById("team-schedule-team");
@@ -136,6 +139,8 @@
     ui.matchTableBody.addEventListener("click", handleMatchActions);
     ui.bracketDivision.addEventListener("change", renderBrackets);
     ui.generateBracket.addEventListener("click", handleGenerateBracket);
+    ui.printBracket.addEventListener("click", handlePrintBrackets);
+    ui.exportBracket.addEventListener("click", handleExportBracket);
 
     ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
     ui.printTeamSchedule.addEventListener("click", handlePrintTeamSchedule);
@@ -583,6 +588,50 @@
     preparePrintMeta("standings");
     setPrintContext("standings");
     window.print();
+  }
+
+  function handlePrintBrackets() {
+    preparePrintMeta("brackets");
+    setPrintContext("brackets");
+    window.print();
+  }
+
+  function handleExportBracket() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division first.");
+      return;
+    }
+
+    var division = findDivision(divisionId);
+    var bracketMatches = getBracketMatches(divisionId)
+      .slice()
+      .sort(function (a, b) {
+        if (a.roundNumber !== b.roundNumber) {
+          return a.roundNumber - b.roundNumber;
+        }
+        return a.indexInRound - b.indexInRound;
+      });
+
+    if (!bracketMatches.length) {
+      window.alert("No bracket exists for this division yet.");
+      return;
+    }
+
+    var payload = {
+      tournament: {
+        id: state.tournament.id,
+        name: state.tournament.name,
+        startDate: state.tournament.startDate,
+        endDate: state.tournament.endDate
+      },
+      division: division ? { id: division.id, name: division.name } : { id: divisionId, name: "Unknown" },
+      exportedAt: new Date().toISOString(),
+      matches: bracketMatches
+    };
+
+    var fileNameBase = sanitizeFileName((division ? division.name : "division") + "-bracket");
+    downloadJson(payload, fileNameBase + ".json");
   }
 
   function handleMatchTableSubmit(event) {
@@ -1198,6 +1247,7 @@
     var divisionId = ui.bracketDivision.value || "";
     if (!divisionId) {
       ui.bracketBoard.innerHTML = "<p>Select a division to view or generate a bracket.</p>";
+      renderPrintMeta(ui.printMetaBrackets, "Bracket", "Select a division to print a bracket.");
       return;
     }
 
@@ -1205,6 +1255,7 @@
     var bracketMatches = getBracketMatches(divisionId);
     if (!bracketMatches.length) {
       ui.bracketBoard.innerHTML = "<p>No bracket yet for " + escapeHtml(division ? division.name : "this division") + ". Generate a single-elimination bracket to begin.</p>";
+      renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
       return;
     }
 
@@ -1241,6 +1292,7 @@
     }).join("");
 
     ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p><div class=\"bracket-grid\">" + roundHtml + "</div>";
+    renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
   }
 
   function setPrintContext(viewName) {
@@ -1270,6 +1322,13 @@
       var standingsDivision = findDivision(ui.standingsDivision.value);
       var standingsDetail = standingsDivision ? ("Division: " + standingsDivision.name) : "Select a division to print standings.";
       renderPrintMeta(ui.printMetaStandings, "Standings", standingsDetail);
+      return;
+    }
+
+    if (viewName === "brackets") {
+      var bracketDivision = findDivision(ui.bracketDivision.value);
+      var bracketDetail = bracketDivision ? ("Division: " + bracketDivision.name) : "Select a division to print a bracket.";
+      renderPrintMeta(ui.printMetaBrackets, "Bracket", bracketDetail);
     }
   }
 
@@ -1330,6 +1389,13 @@
       return "";
     }
     return parsed.toLocaleDateString();
+  }
+
+  function sanitizeFileName(text) {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "bracket";
   }
 
   function renderPublicBoard() {
@@ -1434,12 +1500,16 @@
   }
 
   function exportJson() {
-    var payload = JSON.stringify(state, null, 2);
+    downloadJson(state, "tournament-planner-data.json");
+  }
+
+  function downloadJson(value, fileName) {
+    var payload = JSON.stringify(value, null, 2);
     var blob = new Blob([payload], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var link = document.createElement("a");
     link.href = url;
-    link.download = "tournament-planner-data.json";
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
   }

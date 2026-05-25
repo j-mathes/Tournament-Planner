@@ -292,9 +292,16 @@
             Division
             <select id="bracket-division"></select>
           </label>
-          <button id="generate-bracket" type="button">Generate Single Elimination</button>
+          <div class="form-actions">
+            <button id="generate-bracket" type="button">Generate Single Elimination</button>
+            <button id="print-bracket" type="button" class="secondary">Print Bracket</button>
+            <button id="export-bracket" type="button" class="secondary">Export Bracket JSON</button>
+          </div>
         </section>
-        <div class="card" id="bracket-board"></div>
+        <div class="card">
+          <div class="print-meta" id="print-meta-brackets" aria-hidden="true"></div>
+          <div id="bracket-board"></div>
+        </div>
       </section>
 
       <section class="view" id="view-public" aria-labelledby="public-title">

@@ -37,6 +37,8 @@ It is designed to:
   - Auto-advance bye matches
   - Automatic winner progression to later rounds
   - Bracket board grouped by rounds
+  - Bracket print workflow
+  - Division-specific bracket JSON export
 - Standings
   - Ranking by wins
   - Tiebreakers by set ratio, then point ratio
@@ -51,7 +53,7 @@ It is designed to:
   - Import app data from JSON
 - Printing
   - Print-friendly schedule and standings output with context header (event, dates, filter/team/division)
-  - Dedicated print actions for Matches, Team Schedule, and Standings
+  - Dedicated print actions for Matches, Team Schedule, Standings, and Brackets
 
 ## Tech Stack
 
