@@ -167,6 +167,10 @@
     ui.printMetaStandings = document.getElementById("print-meta-standings");
 
     ui.publicBoard = document.getElementById("public-board");
+    ui.publicVenueFilter = document.getElementById("public-venue-filter");
+    ui.publicDivisionFilter = document.getElementById("public-division-filter");
+    ui.publicDisplayMode = document.getElementById("public-display-mode");
+    ui.publicFullscreen = document.getElementById("public-fullscreen");
   }
 
   function bindEvents() {
@@ -220,6 +224,11 @@
 
     ui.standingsDivision.addEventListener("change", function() { renderStandings(); renderFinalResults(); });
     ui.printStandings.addEventListener("click", handlePrintStandings);
+
+    ui.publicVenueFilter.addEventListener("change", renderPublicBoard);
+    ui.publicDivisionFilter.addEventListener("change", renderPublicBoard);
+    ui.publicDisplayMode.addEventListener("change", renderPublicBoard);
+    ui.publicFullscreen.addEventListener("click", handlePublicFullscreen);
   }
 
   function handleNavClick(event) {
@@ -1446,6 +1455,8 @@
     var selectedVenueFilter = ui.matchVenueFilter.value;
     var selectedScheduleTeam = ui.teamScheduleTeam.value;
     var selectedBracketDivision = ui.bracketDivision.value;
+    var selectedPublicVenue = ui.publicVenueFilter.value;
+    var selectedPublicDivision = ui.publicDivisionFilter.value;
 
     var divisionOptions = state.divisions.map(function (division) {
       return optionHtml(division.id, division.name);
@@ -1462,6 +1473,10 @@
     ui.scheduleVenue.innerHTML = "<option value=\"\">Select venue</option>" + venueOptions;
     ui.bracketScheduleVenue.innerHTML = "<option value=\"\">Select venue</option>" + venueOptions;
     ui.matchVenueFilter.innerHTML = "<option value=\"\">All venues</option>" + venueOptions;
+    ui.publicVenueFilter.innerHTML = "<option value=\"\">All venues</option>" + venueOptions;
+
+    var divisionOptionsAll = "<option value=\"\">All divisions</option>" + divisionOptions;
+    ui.publicDivisionFilter.innerHTML = divisionOptionsAll;
 
     var teamOptions = state.teams
       .slice()
@@ -1482,6 +1497,8 @@
     restoreSelectValue(ui.matchVenueFilter, selectedVenueFilter);
     restoreSelectValue(ui.teamScheduleTeam, selectedScheduleTeam);
     restoreSelectValue(ui.bracketDivision, selectedBracketDivision);
+    restoreSelectValue(ui.publicVenueFilter, selectedPublicVenue);
+    restoreSelectValue(ui.publicDivisionFilter, selectedPublicDivision);
   }
 
   function renderTeamSchedule() {
@@ -2345,32 +2362,211 @@
   }
 
   function renderPublicBoard() {
-    var live = state.matches
-      .filter(function (match) {
-        return match.status !== "completed";
-      })
-      .sort(function (a, b) {
-        return (a.startTime || "9999").localeCompare(b.startTime || "9999");
-      })
-      .slice(0, 8);
+    var mode = ui.publicDisplayMode.value || "courts";
+    var venueId = ui.publicVenueFilter.value || "";
+    var divisionId = ui.publicDivisionFilter.value || "";
 
-    if (!live.length) {
-      ui.publicBoard.innerHTML = "<p>No upcoming or active matches yet.</p>";
+    if (mode === "courts") {
+      renderPublicCourtBoard(venueId, divisionId);
+    } else if (mode === "standings") {
+      renderPublicStandings(divisionId);
+    } else {
+      renderPublicSchedule(venueId, divisionId);
+    }
+  }
+
+  function renderPublicCourtBoard(venueId, divisionId) {
+    // Build a map: venueId|courtId -> { venue, court, matches sorted by time }
+    var venues = venueId ? state.venues.filter(function (v) { return v.id === venueId; }) : state.venues;
+    if (!venues.length) {
+      ui.publicBoard.innerHTML = "<p class='public-empty'>No venues configured. Assign matches to courts to use the court board.</p>";
       return;
     }
 
-    ui.publicBoard.innerHTML = "<h3>Upcoming / Active Matches</h3>" + live
-      .map(function (match) {
-        var teamA = findTeam(match.teamAId);
-        var teamB = findTeam(match.teamBId);
-        var division = findDivision(match.divisionId);
-        return "<p><strong>" + escapeHtml(teamA ? teamA.name : "TBD") +
-          " vs " + escapeHtml(teamB ? teamB.name : "TBD") +
-          "</strong> <span class=\"tag\">" + escapeHtml(match.status) +
-          "</span><br><small>" + escapeHtml(division ? division.name : "") +
-          " | " + escapeHtml(renderAssignmentText(match)) + "</small></p>";
+    var cards = [];
+    venues.forEach(function (venue) {
+      venue.courts.forEach(function (court) {
+        var courtMatches = state.matches
+          .filter(function (m) {
+            return m.venueId === venue.id && m.courtId === court.id &&
+              (!divisionId || m.divisionId === divisionId);
+          })
+          .sort(function (a, b) {
+            return (a.startTime || "9999").localeCompare(b.startTime || "9999");
+          });
+        cards.push({ venue: venue, court: court, matches: courtMatches });
+      });
+    });
+
+    if (!cards.length) {
+      ui.publicBoard.innerHTML = "<p class='public-empty'>No courts found for selected filters.</p>";
+      return;
+    }
+
+    var html = "<div class='public-court-grid'>";
+    cards.forEach(function (card) {
+      var currentMatch = card.matches.find(function (m) { return m.status === "in_progress"; }) ||
+        card.matches.find(function (m) { return m.status === "scheduled"; });
+      var nextMatch = null;
+      if (currentMatch && currentMatch.status === "in_progress") {
+        nextMatch = card.matches.find(function (m) { return m.status === "scheduled"; });
+      }
+
+      html += "<div class='court-card'>";
+      html += "<div class='court-card-header'>" +
+        "<span class='court-card-label'>" + escapeHtml(card.court.label) + "</span>" +
+        "<span class='court-card-venue'>" + escapeHtml(card.venue.name) + "</span>" +
+        "</div>";
+
+      if (!currentMatch) {
+        html += "<div class='court-card-idle'>No upcoming matches</div>";
+      } else {
+        html += renderPublicMatchBlock(currentMatch, currentMatch.status === "in_progress" ? "NOW PLAYING" : "UP NEXT", "current");
+        if (nextMatch) {
+          html += renderPublicMatchBlock(nextMatch, "AFTER", "next");
+        }
+      }
+
+      html += "</div>";
+    });
+    html += "</div>";
+
+    ui.publicBoard.innerHTML = html;
+  }
+
+  function renderPublicMatchBlock(match, label, blockClass) {
+    var teamA = findTeam(match.teamAId);
+    var teamB = findTeam(match.teamBId);
+    var division = findDivision(match.divisionId);
+    var workTeam = findTeam(match.workTeamId);
+    var fmt = getFormatForMatch(match);
+
+    return "<div class='court-match-block court-match-" + blockClass + "'>" +
+      "<div class='court-match-label'>" + escapeHtml(label) + "</div>" +
+      "<div class='court-match-teams'>" +
+        escapeHtml(teamA ? teamA.name : "TBD") + " <span class='vs-sep'>vs</span> " + escapeHtml(teamB ? teamB.name : "TBD") +
+      "</div>" +
+      "<div class='court-match-meta'>" +
+        (division ? "<span>" + escapeHtml(division.name) + "</span>" : "") +
+        (fmt ? " <span>\u00B7 " + escapeHtml(fmt.name) + "</span>" : "") +
+        (match.startTime ? " <span>\u00B7 " + escapeHtml(formatDateTime(match.startTime)) + "</span>" : "") +
+      "</div>" +
+      (workTeam ? "<div class='court-match-work'>Work: <strong>" + escapeHtml(workTeam.name) + "</strong></div>" : "") +
+      "</div>";
+  }
+
+  function renderPublicStandings(divisionId) {
+    var divisions = divisionId
+      ? state.divisions.filter(function (d) { return d.id === divisionId; })
+      : state.divisions;
+
+    if (!divisions.length) {
+      ui.publicBoard.innerHTML = "<p class='public-empty'>No divisions yet.</p>";
+      return;
+    }
+
+    var html = "<div class='public-standings-grid'>";
+    divisions.forEach(function (div) {
+      var rows = computeStandings(div.id);
+      if (!rows.length) { return; }
+
+      var bracketMatches = getBracketMatches(div.id);
+      var champion = null;
+      if (bracketMatches.length) {
+        var rounds = groupBracketRounds(bracketMatches);
+        var roundNumbers = Object.keys(rounds).map(function (k) { return parseInt(k, 10); }).sort(function (a, b) { return a - b; });
+        var finalRound = rounds[roundNumbers[roundNumbers.length - 1]] || [];
+        if (finalRound.length === 1 && finalRound[0].winnerId) {
+          champion = findTeam(finalRound[0].winnerId);
+        }
+      }
+
+      html += "<div class='public-standings-block'>" +
+        "<h3 class='public-standings-title'>" + escapeHtml(div.name) + (champion ? " \u2014 \uD83C\uDFC6 " + escapeHtml(champion.name) : "") + "</h3>" +
+        "<table class='public-standings-table'><thead><tr>" +
+        "<th>#</th><th>Team</th><th>W</th><th>L</th><th>Sets</th><th>Pts</th>" +
+        "</tr></thead><tbody>" +
+        rows.map(function (row, i) {
+          return "<tr" + (champion && row.team.id === champion.id ? " class='champion-row'" : "") + ">" +
+            "<td>" + (i + 1) + "</td>" +
+            "<td>" + escapeHtml(row.team.name) + "</td>" +
+            "<td>" + row.wins + "</td>" +
+            "<td>" + row.losses + "</td>" +
+            "<td>" + formatRatio(row.setsWon, row.setsLost) + "</td>" +
+            "<td>" + formatRatio(row.pointsFor, row.pointsAgainst) + "</td>" +
+            "</tr>";
+        }).join("") +
+        "</tbody></table></div>";
+    });
+    html += "</div>";
+
+    ui.publicBoard.innerHTML = html || "<p class='public-empty'>No standings data yet. Complete pool play matches to see standings.</p>";
+  }
+
+  function renderPublicSchedule(venueId, divisionId) {
+    var matches = state.matches
+      .filter(function (m) {
+        return m.status !== "completed" &&
+          (!venueId || m.venueId === venueId) &&
+          (!divisionId || m.divisionId === divisionId);
       })
-      .join("<hr>");
+      .sort(function (a, b) {
+        return (a.startTime || "9999").localeCompare(b.startTime || "9999") || a.roundNumber - b.roundNumber;
+      })
+      .slice(0, 20);
+
+    if (!matches.length) {
+      ui.publicBoard.innerHTML = "<p class='public-empty'>No upcoming or active matches.</p>";
+      return;
+    }
+
+    var inProgress = matches.filter(function (m) { return m.status === "in_progress"; });
+    var scheduled = matches.filter(function (m) { return m.status === "scheduled"; });
+
+    var html = "";
+    if (inProgress.length) {
+      html += "<h3 class='public-section-title'>In Progress</h3><div class='public-match-list'>" +
+        inProgress.map(renderPublicMatchRow).join("") + "</div>";
+    }
+    if (scheduled.length) {
+      html += "<h3 class='public-section-title'>Upcoming</h3><div class='public-match-list'>" +
+        scheduled.map(renderPublicMatchRow).join("") + "</div>";
+    }
+
+    ui.publicBoard.innerHTML = html;
+  }
+
+  function renderPublicMatchRow(match) {
+    var teamA = findTeam(match.teamAId);
+    var teamB = findTeam(match.teamBId);
+    var division = findDivision(match.divisionId);
+    var venue = findVenue(match.venueId);
+    var court = findCourt(match.venueId, match.courtId);
+    var workTeam = findTeam(match.workTeamId);
+
+    return "<div class='public-match-row'>" +
+      "<div class='public-match-teams'>" +
+        "<strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong>" +
+        " " + renderStatusTag(match.status, match) +
+      "</div>" +
+      "<div class='public-match-details'>" +
+        (division ? escapeHtml(division.name) + " \u00B7 " : "") +
+        (venue ? escapeHtml(venue.name) + (court ? " " + escapeHtml(court.label) : "") + " \u00B7 " : "") +
+        (match.startTime ? escapeHtml(formatDateTime(match.startTime)) : "Time TBD") +
+        (workTeam ? " \u00B7 Work: " + escapeHtml(workTeam.name) : "") +
+      "</div>" +
+      "</div>";
+  }
+
+  function handlePublicFullscreen() {
+    var el = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (el.requestFullscreen) { el.requestFullscreen(); }
+      ui.publicFullscreen.textContent = "\u2715 Exit Full Screen";
+    } else {
+      if (document.exitFullscreen) { document.exitFullscreen(); }
+      ui.publicFullscreen.textContent = "\u26F6 Full Screen";
+    }
   }
 
   function computeStandings(divisionId) {

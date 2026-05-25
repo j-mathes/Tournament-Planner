@@ -357,7 +357,28 @@
 
       <section class="view" id="view-public" aria-labelledby="public-title">
         <h2 id="public-title">Public Display</h2>
-        <div class="card" id="public-board"></div>
+        <section class="card form-grid no-print" id="public-controls" aria-label="Display Controls">
+          <label>
+            Venue
+            <select id="public-venue-filter"></select>
+          </label>
+          <label>
+            Division
+            <select id="public-division-filter"></select>
+          </label>
+          <label>
+            Mode
+            <select id="public-display-mode">
+              <option value="courts">Court Board</option>
+              <option value="standings">Live Standings</option>
+              <option value="schedule">Match Schedule</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button id="public-fullscreen" type="button" class="secondary">&#x26F6; Full Screen</button>
+          </div>
+        </section>
+        <div id="public-board"></div>
       </section>
     </main>
 

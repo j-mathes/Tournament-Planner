@@ -486,9 +486,182 @@ td {
   display: block;
 }
 
+/* ── Public Display ─────────────────────────────────────────────────────── */
+
+.public-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.public-section-title {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 1rem 0 0.5rem;
+}
+
+/* Court board grid */
+.public-court-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.court-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.court-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--primary);
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+}
+
+.court-card-label {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.court-card-venue {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.court-card-idle {
+  padding: 1rem 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.court-match-block {
+  padding: 0.6rem 0.75rem;
+}
+
+.court-match-block + .court-match-block {
+  border-top: 1px dashed var(--border);
+  background: #f9fafb;
+}
+
+.court-match-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.court-match-current .court-match-label {
+  color: var(--primary);
+}
+
+.court-match-teams {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.vs-sep {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.court-match-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.court-match-work {
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+  color: #1a4a6b;
+}
+
+/* Public standings */
+.public-standings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.public-standings-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.public-standings-title {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.public-standings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.public-standings-table th,
+.public-standings-table td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.public-standings-table td:nth-child(2) {
+  text-align: left;
+}
+
+.champion-row td {
+  background: #fffbe6;
+  font-weight: 600;
+}
+
+/* Public match schedule list */
+.public-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.public-match-row {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.public-match-teams {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.public-match-details {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.1rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 .final-results {
   padding: 0.1rem 0;
 }
+
 
 .champion-banner {
   display: flex;

@@ -72,9 +72,12 @@ It is designed to:
 - Standings
   - Ranking by wins
   - Tiebreakers by set ratio, then point ratio
-- Public display
-  - Upcoming and active matches board
-  - Includes assignment context (venue, court, time)
+- Public display engine
+  - Court board mode — matches grouped by court with "Now Playing" / "Up Next" cards showing teams, division, format, time, and work team
+  - Live standings mode — all-divisions (or filtered) standings grid updating instantly as results are entered; champion highlighted
+  - Match schedule mode — in-progress and upcoming matches list with venue/court/time/work team context
+  - Venue and division filters apply across all three modes
+  - Full-screen button (browser native fullscreen API) for TV/projector use
 - Team schedule
   - Team-specific schedule view with team filter
   - Team schedule print workflow
