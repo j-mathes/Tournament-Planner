@@ -41,6 +41,7 @@ It is designed to:
   - Automatic winner progression to later rounds
   - Bracket board grouped by rounds
   - Bracket integrity validation warnings (duplicates, malformed rounds, missing teams, invalid winners)
+  - One-click bracket repair actions (fix self-matches, duplicate round entries, invalid/missing winners, or all at once)
   - Bracket print workflow
   - Division-specific bracket JSON export
   - Division-specific bracket JSON import

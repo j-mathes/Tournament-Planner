@@ -152,6 +152,7 @@
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
     ui.importBracketJson.addEventListener("change", handleImportBracket);
+    ui.bracketBoard.addEventListener("click", handleBracketBoardClick);
 
     ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
     ui.printTeamSchedule.addEventListener("click", handlePrintTeamSchedule);
@@ -488,6 +489,33 @@
 
     saveState();
     renderAll();
+  }
+
+  function handleBracketBoardClick(event) {
+    var button = event.target.closest("button[data-repair]");
+    if (!button) { return; }
+    var action = button.getAttribute("data-repair");
+    var divisionId = button.getAttribute("data-division");
+    if (!divisionId) { return; }
+
+    if (action === "invalid-winners") {
+      repairInvalidWinners(divisionId);
+      recomputeBracketProgression(divisionId);
+      saveState();
+      renderBrackets();
+    } else if (action === "duplicate-entries") {
+      repairDuplicateRoundEntries(divisionId);
+      recomputeBracketProgression(divisionId);
+      saveState();
+      renderBrackets();
+    } else if (action === "self-match") {
+      repairSelfMatches(divisionId);
+      recomputeBracketProgression(divisionId);
+      saveState();
+      renderBrackets();
+    } else if (action === "all") {
+      repairBracketAll(divisionId);
+    }
   }
 
   function handleGenerateBracket() {
@@ -1467,21 +1495,40 @@
     }).join("");
 
     ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p>" +
-      renderBracketIntegrity(integrityIssues) +
+      renderBracketIntegrity(integrityIssues, divisionId) +
       "<div class=\"bracket-grid\">" + roundHtml + "</div>";
     renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
   }
 
-  function renderBracketIntegrity(issues) {
+  function renderBracketIntegrity(issues, divisionId) {
     if (!issues.length) {
       return "<section class=\"bracket-integrity\"><p><span class=\"tag complete\">valid</span> Bracket integrity checks passed.</p></section>";
     }
 
-    return "<section class=\"bracket-integrity\"><p><span class=\"tag warning\">warning</span> Bracket integrity issues detected.</p><ul class=\"warning-list\">" +
-      issues.map(function (item) {
-        return "<li>" + escapeHtml(item) + "</li>";
-      }).join("") +
-      "</ul></section>";
+    var issueText = issues.join(" ");
+    var hasSelfMatch     = /same team on both sides/.test(issueText);
+    var hasDupeEntry     = /appears in multiple matches/.test(issueText);
+    var hasInvalidWinner = /missing a winner|winner is not one of the scheduled/.test(issueText);
+
+    var repairButtons = [];
+    if (hasSelfMatch) {
+      repairButtons.push("<button class=\"btn-repair\" data-repair=\"self-match\" data-division=\"" + escapeHtml(divisionId) + "\">Fix Self-Matches</button>");
+    }
+    if (hasDupeEntry) {
+      repairButtons.push("<button class=\"btn-repair\" data-repair=\"duplicate-entries\" data-division=\"" + escapeHtml(divisionId) + "\">Fix Duplicate Entries</button>");
+    }
+    if (hasInvalidWinner) {
+      repairButtons.push("<button class=\"btn-repair\" data-repair=\"invalid-winners\" data-division=\"" + escapeHtml(divisionId) + "\">Fix Invalid Winners</button>");
+    }
+    repairButtons.push("<button class=\"btn-repair btn-repair-all\" data-repair=\"all\" data-division=\"" + escapeHtml(divisionId) + "\">Fix All Issues</button>");
+
+    return "<section class=\"bracket-integrity\">" +
+      "<p><span class=\"tag warning\">warning</span> Bracket integrity issues detected.</p>" +
+      "<ul class=\"warning-list\">" +
+      issues.map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") +
+      "</ul>" +
+      "<div class=\"bracket-repair-actions\">" + repairButtons.join("") + "</div>" +
+      "</section>";
   }
 
   function setPrintContext(viewName) {
@@ -2021,6 +2068,73 @@
       return true;
     });
   }
+
+  // ── Bracket repair helpers ────────────────────────────────────────────────
+
+  /** Remove winners that don't belong to either scheduled team; reset
+   *  completed matches that have no winner back to "scheduled". */
+  function repairInvalidWinners(divisionId) {
+    getBracketMatches(divisionId).forEach(function (match) {
+      if (match.winnerId && match.winnerId !== match.teamAId && match.winnerId !== match.teamBId) {
+        match.winnerId = null;
+        match.loserId = null;
+        match.status = "scheduled";
+      }
+      if (match.status === "completed" && !match.winnerId) {
+        match.status = "scheduled";
+      }
+    });
+  }
+
+  /** Remove bracket matches that cause a team to appear more than once in
+   *  the same round (keeps the first-seen occurrence). */
+  function repairDuplicateRoundEntries(divisionId) {
+    var rounds = groupBracketRounds(getBracketMatches(divisionId));
+    var idsToRemove = {};
+
+    Object.keys(rounds).forEach(function (roundKey) {
+      var seen = {};
+      rounds[roundKey].forEach(function (match) {
+        var isDupe = false;
+        [match.teamAId, match.teamBId].forEach(function (teamId) {
+          if (!teamId) { return; }
+          if (seen[teamId]) { isDupe = true; }
+          seen[teamId] = true;
+        });
+        if (isDupe) {
+          idsToRemove[match.id] = true;
+        }
+      });
+    });
+
+    if (Object.keys(idsToRemove).length) {
+      state.matches = state.matches.filter(function (m) { return !idsToRemove[m.id]; });
+    }
+  }
+
+  /** Clear teamBId on any match where both sides reference the same team. */
+  function repairSelfMatches(divisionId) {
+    getBracketMatches(divisionId).forEach(function (match) {
+      if (match.teamAId && match.teamAId === match.teamBId) {
+        match.teamBId = null;
+        match.winnerId = null;
+        match.loserId = null;
+        match.status = "scheduled";
+      }
+    });
+  }
+
+  /** Run all repair passes for a division, then re-run progression. */
+  function repairBracketAll(divisionId) {
+    repairSelfMatches(divisionId);
+    repairDuplicateRoundEntries(divisionId);
+    repairInvalidWinners(divisionId);
+    recomputeBracketProgression(divisionId);
+    saveState();
+    renderBrackets();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   function recomputeAllBracketProgression() {
     state.divisions.forEach(function (division) {
