@@ -26,6 +26,8 @@ It is designed to:
   - Auto-assign venue, court, and start time by division
   - Inline per-match assignment editor (Assign / Edit / Clear Assignment)
   - Filter matches by division, venue, court, and status
+  - Scheduling conflict warnings for team overlaps and court overlaps
+  - Conflict badges on affected matches
   - Enter set scores
   - Clear match scores
   - Automatic winner and status updates
@@ -101,13 +103,12 @@ Notes:
 - No backend APIs
 - No authentication
 - Scheduling uses simple slot sequencing and court rotation (no advanced constraint solver)
-- Match assignment does not yet include drag-and-drop or conflict warnings
+- Match assignment does not yet include drag-and-drop scheduling
 
 ## Roadmap
 
 Planned next improvements:
 - Improved print layouts for schedules and standings
-- Scheduling conflict detection and warnings
 - More advanced tournament formats and bracket workflows
 
 ## License

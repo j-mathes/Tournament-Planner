@@ -248,6 +248,21 @@ td {
   color: #0f5738;
 }
 
+.tag.warning {
+  background: #fde9e9;
+  color: #8e2323;
+}
+
+.warning-list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.warning-list li {
+  margin-bottom: 0.3rem;
+  color: #6d2424;
+}
+
 .score-form {
   display: flex;
   gap: 0.4rem;

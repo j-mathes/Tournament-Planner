@@ -2,6 +2,7 @@
   "use strict";
 
   var STORAGE_KEY = "tp.static.v1";
+  var DEFAULT_MATCH_MINUTES = 45;
 
   var state = createEmptyState();
   var ui = {};
@@ -81,6 +82,7 @@
     ui.matchVenueFilter = document.getElementById("match-venue-filter");
     ui.matchCourtFilter = document.getElementById("match-court-filter");
     ui.matchStatusFilter = document.getElementById("match-status-filter");
+    ui.matchConflicts = document.getElementById("match-conflicts");
     ui.matchTableBody = document.getElementById("match-table-body");
 
     ui.teamScheduleTeam = document.getElementById("team-schedule-team");
@@ -449,6 +451,7 @@
         venueId: null,
         courtId: null,
         startTime: null,
+        durationMinutes: null,
         status: "scheduled",
         setScores: [],
         winnerId: null,
@@ -498,6 +501,7 @@
       match.venueId = venue.id;
       match.courtId = court.id;
       match.startTime = start.toISOString();
+      match.durationMinutes = slotMinutes;
     });
 
     saveState();
@@ -604,6 +608,9 @@
     match.venueId = venue.id;
     match.courtId = court.id;
     match.startTime = parsedDate.toISOString();
+    if (!Number.isFinite(match.durationMinutes)) {
+      match.durationMinutes = Math.max(10, parseInt(ui.scheduleSlotMinutes.value, 10) || DEFAULT_MATCH_MINUTES);
+    }
     assignmentEditMatchId = null;
     saveState();
     renderAll();
@@ -887,6 +894,7 @@
   }
 
   function renderMatches() {
+    var conflictData = computeScheduleConflicts(state.matches);
     var divisionId = ui.matchDivision.value || "";
     var venueId = ui.matchVenueFilter.value || "";
     var courtId = ui.matchCourtFilter.value || "";
@@ -908,22 +916,128 @@
         return a.roundNumber - b.roundNumber;
       });
 
+    renderMatchConflicts(matches, conflictData);
+
     ui.matchTableBody.innerHTML = matches
       .map(function (match) {
         var teamA = findTeam(match.teamAId);
         var teamB = findTeam(match.teamBId);
         var winner = findTeam(match.winnerId);
+        var hasConflict = Boolean(conflictData.byMatchId[match.id]);
 
         return "<tr>" +
           "<td><strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong><br><small>Round " + match.roundNumber + "</small></td>" +
           "<td>" + renderStatusTag(match.status) + "</td>" +
-          "<td>" + renderAssignment(match) + "</td>" +
+          "<td>" + renderAssignment(match) + (hasConflict ? renderConflictBadge() : "") + "</td>" +
           "<td>" + renderSetSummary(match) + "</td>" +
           "<td>" + escapeHtml(winner ? winner.name : "-") + "</td>" +
           "<td>" + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
           "</tr>";
       })
       .join("");
+  }
+
+  function renderMatchConflicts(filteredMatches, conflictData) {
+    var filteredIds = filteredMatches.reduce(function (map, match) {
+      map[match.id] = true;
+      return map;
+    }, {});
+
+    var visible = conflictData.entries.filter(function (entry) {
+      return entry.matchIds.some(function (id) {
+        return filteredIds[id];
+      });
+    });
+
+    if (!visible.length) {
+      ui.matchConflicts.innerHTML = "<p><strong>No scheduling conflicts detected</strong> for the current filters.</p>";
+      return;
+    }
+
+    ui.matchConflicts.innerHTML = "<h3>Scheduling Warnings</h3><ul class=\"warning-list\">" + visible
+      .map(function (entry) {
+        return "<li>" + escapeHtml(entry.message) + "</li>";
+      })
+      .join("") + "</ul>";
+  }
+
+  function computeScheduleConflicts(matches) {
+    var scheduled = matches.filter(function (match) {
+      return Boolean(match.startTime);
+    });
+
+    var entries = [];
+    var byMatchId = {};
+
+    for (var i = 0; i < scheduled.length; i += 1) {
+      for (var j = i + 1; j < scheduled.length; j += 1) {
+        var a = scheduled[i];
+        var b = scheduled[j];
+        if (!matchesOverlap(a, b)) {
+          continue;
+        }
+
+        if (a.venueId && b.venueId && a.courtId && b.courtId && a.venueId === b.venueId && a.courtId === b.courtId) {
+          addConflict(entries, byMatchId, [a.id, b.id],
+            "Court overlap: " + getMatchLabel(a) + " overlaps with " + getMatchLabel(b) + ".");
+        }
+
+        var shared = sharedTeams(a, b);
+        shared.forEach(function (teamId) {
+          var team = findTeam(teamId);
+          var teamName = team ? team.name : "Unknown team";
+          addConflict(entries, byMatchId, [a.id, b.id],
+            "Team overlap: " + teamName + " has overlapping matches (" + getMatchLabel(a) + " and " + getMatchLabel(b) + ").");
+        });
+      }
+    }
+
+    return { entries: entries, byMatchId: byMatchId };
+  }
+
+  function matchesOverlap(first, second) {
+    var firstStart = new Date(first.startTime);
+    var secondStart = new Date(second.startTime);
+    if (isNaN(firstStart.getTime()) || isNaN(secondStart.getTime())) {
+      return false;
+    }
+
+    var firstEnd = new Date(firstStart.getTime() + getMatchDurationMinutes(first) * 60000);
+    var secondEnd = new Date(secondStart.getTime() + getMatchDurationMinutes(second) * 60000);
+
+    return firstStart < secondEnd && secondStart < firstEnd;
+  }
+
+  function getMatchDurationMinutes(match) {
+    if (Number.isFinite(match.durationMinutes) && match.durationMinutes > 0) {
+      return match.durationMinutes;
+    }
+    return DEFAULT_MATCH_MINUTES;
+  }
+
+  function sharedTeams(first, second) {
+    var ids = [first.teamAId, first.teamBId];
+    return ids.filter(function (id) {
+      return id && (second.teamAId === id || second.teamBId === id);
+    });
+  }
+
+  function addConflict(entries, byMatchId, matchIds, message) {
+    entries.push({ matchIds: matchIds, message: message });
+    matchIds.forEach(function (id) {
+      byMatchId[id] = true;
+    });
+  }
+
+  function getMatchLabel(match) {
+    var a = findTeam(match.teamAId);
+    var b = findTeam(match.teamBId);
+    var time = match.startTime ? formatDateTime(match.startTime) : "Unscheduled";
+    return (a ? a.name : "TBD") + " vs " + (b ? b.name : "TBD") + " at " + time;
+  }
+
+  function renderConflictBadge() {
+    return "<div><span class=\"tag warning\">conflict</span></div>";
   }
 
   function renderAssignmentActions(match) {
@@ -1180,6 +1294,7 @@
         venueId: match.venueId || null,
         courtId: match.courtId || null,
         startTime: match.startTime || null,
+        durationMinutes: Number.isFinite(match.durationMinutes) ? match.durationMinutes : null,
         status: match.status || "scheduled",
         setScores: Array.isArray(match.setScores) ? match.setScores : [],
         winnerId: match.winnerId || null,
