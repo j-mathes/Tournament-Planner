@@ -43,6 +43,13 @@ It is designed to:
   - Bracket integrity validation warnings (duplicates, malformed rounds, missing teams, invalid winners)
   - One-click bracket repair actions (fix self-matches, duplicate round entries, invalid/missing winners, or all at once)
   - Bracket print workflow
+- Work assignments
+  - Work team (officiate/scorekeep) assignment per match
+  - Auto-assign work teams across a division, balanced by workload
+  - Team cannot be assigned to work a match they are playing in
+  - Manual override with inline team picker per match
+  - Work conflict warnings when a team is both playing and working in the same slot
+  - Team schedule view shows both playing and working entries with role badge
   - Division-specific bracket JSON export
   - Division-specific bracket JSON import
 - Standings

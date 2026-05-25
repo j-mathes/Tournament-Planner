@@ -7,6 +7,7 @@
   var state = createEmptyState();
   var ui = {};
   var assignmentEditMatchId = null;
+  var workEditMatchId = null;
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -79,6 +80,7 @@
     ui.scheduleSlotMinutes = document.getElementById("schedule-slot-minutes");
     ui.scheduleBreakMinutes = document.getElementById("schedule-break-minutes");
     ui.autoAssignSchedule = document.getElementById("auto-assign-schedule");
+    ui.autoAssignWorkTeams = document.getElementById("auto-assign-work-teams");
     ui.printSchedule = document.getElementById("print-schedule");
     ui.matchVenueFilter = document.getElementById("match-venue-filter");
     ui.matchCourtFilter = document.getElementById("match-court-filter");
@@ -136,6 +138,7 @@
     ui.matchDivision.addEventListener("change", renderMatches);
     ui.generateRoundRobin.addEventListener("click", handleGenerateRoundRobin);
     ui.autoAssignSchedule.addEventListener("click", handleAutoAssignSchedule);
+    ui.autoAssignWorkTeams.addEventListener("click", handleAutoAssignWorkTeams);
     ui.printSchedule.addEventListener("click", handlePrintMatches);
     ui.matchVenueFilter.addEventListener("change", function () {
       updateMatchCourtFilterOptions();
@@ -145,6 +148,7 @@
     ui.matchStatusFilter.addEventListener("change", renderMatches);
     ui.matchTableBody.addEventListener("submit", handleMatchTableSubmit);
     ui.matchTableBody.addEventListener("click", handleMatchActions);
+    ui.matchTableBody.addEventListener("change", handleMatchTableChange);
     ui.bracketDivision.addEventListener("change", renderBrackets);
     ui.generateBracket.addEventListener("click", handleGenerateBracket);
     ui.generateBracketStandings.addEventListener("click", handleGenerateBracketFromStandings);
@@ -484,6 +488,7 @@
         setScores: [],
         winnerId: null,
         loserId: null
+        workTeamId: null
       });
     });
 
@@ -947,7 +952,9 @@
     }
 
     var action = button.getAttribute("data-action");
-    if (action !== "clear-score" && action !== "edit-assignment" && action !== "clear-assignment" && action !== "cancel-assignment") {
+    var workActions = ["edit-work-team", "clear-work-team", "cancel-work-team"];
+    var assignActions = ["clear-score", "edit-assignment", "clear-assignment", "cancel-assignment"];
+    if (assignActions.indexOf(action) === -1 && workActions.indexOf(action) === -1) {
       return;
     }
 
@@ -981,13 +988,63 @@
       return;
     }
 
+    if (action === "edit-work-team") {
+      workEditMatchId = match.id;
+      renderMatches();
+      return;
+    }
+
+    if (action === "cancel-work-team") {
+      workEditMatchId = null;
+      renderMatches();
+      return;
+    }
+
+    if (action === "clear-work-team") {
+      match.workTeamId = null;
+      workEditMatchId = null;
+      saveState();
+      renderAll();
+      return;
+    }
+
     match.setScores = [];
     match.winnerId = null;
     match.loserId = null;
     match.status = "scheduled";
     if (match.stage === "bracket") {
       recomputeBracketProgression(match.divisionId);
+        if (action === "edit-work-team") {
+          workEditMatchId = match.id;
+          renderMatches();
+          return;
+        }
     }
+        if (action === "cancel-work-team") {
+          workEditMatchId = null;
+          renderMatches();
+          return;
+        }
+    saveState();
+        if (action === "clear-work-team") {
+          match.workTeamId = null;
+          workEditMatchId = null;
+          saveState();
+          renderMatches();
+          return;
+        }
+    renderAll();
+        // clear-score falls through to here
+  }
+
+  function handleMatchTableChange(event) {
+    var select = event.target.closest("select[data-action='set-work-team']");
+    if (!select) { return; }
+    var matchId = select.getAttribute("data-match-id");
+    var match = state.matches.find(function (m) { return m.id === matchId; });
+    if (!match) { return; }
+    match.workTeamId = select.value || null;
+    workEditMatchId = null;
     saveState();
     renderAll();
   }
@@ -1107,23 +1164,33 @@
   function renderTeamSchedule() {
     var teamId = ui.teamScheduleTeam.value;
     if (!teamId) {
-      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">Select a team to view schedule.</td></tr>";
+      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"7\">Select a team to view schedule.</td></tr>";
       renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", "Select a team to print a team schedule.");
       return;
     }
 
     var selectedTeam = findTeam(teamId);
     if (!selectedTeam) {
-      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">Selected team was not found.</td></tr>";
+      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"7\">Selected team was not found.</td></tr>";
       renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", "Selected team was not found.");
       return;
     }
 
-    var items = state.matches
+    var playingMatches = state.matches
       .filter(function (match) {
         return match.teamAId === teamId || match.teamBId === teamId;
+      });
+
+    var workingMatches = state.matches
+      .filter(function (match) {
+        return match.workTeamId === teamId;
+      });
+
+    var allItems = playingMatches.concat(
+      workingMatches.filter(function (wm) {
+        return !playingMatches.some(function (pm) { return pm.id === wm.id; });
       })
-      .sort(function (a, b) {
+    ).sort(function (a, b) {
         var ta = a.startTime || "9999";
         var tb = b.startTime || "9999";
         if (ta !== tb) {
@@ -1132,19 +1199,24 @@
         return a.roundNumber - b.roundNumber;
       });
 
-    if (!items.length) {
-      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">No matches scheduled for this team yet.</td></tr>";
+    if (!allItems.length) {
+      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"7\">No matches scheduled for this team yet.</td></tr>";
       renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", getTeamSchedulePrintDetail(selectedTeam));
       return;
     }
 
-    ui.teamScheduleBody.innerHTML = items
+    ui.teamScheduleBody.innerHTML = allItems
       .map(function (match) {
         var teamA = findTeam(match.teamAId);
         var teamB = findTeam(match.teamBId);
         var division = findDivision(match.divisionId);
         var venue = findVenue(match.venueId);
         var court = findCourt(match.venueId, match.courtId);
+        var isWorking = match.workTeamId === teamId;
+        var isPlaying = match.teamAId === teamId || match.teamBId === teamId;
+        var roleCell = isWorking && !isPlaying
+          ? "<span class='tag work-tag'>Work</span>"
+          : (isWorking ? "<span class='tag work-tag'>Work</span> <span class='tag'>Play</span>" : "<span class='tag'>Play</span>");
         return "<tr>" +
           "<td>" + escapeHtml(match.startTime ? formatDateTime(match.startTime) : "Unscheduled") + "</td>" +
           "<td>" + escapeHtml((teamA ? teamA.name : "TBD") + " vs " + (teamB ? teamB.name : "TBD")) + "</td>" +
@@ -1152,6 +1224,7 @@
           "<td>" + escapeHtml(venue ? venue.name : "-") + "</td>" +
           "<td>" + escapeHtml(court ? court.label : "-") + "</td>" +
           "<td>" + renderStatusTag(match.status) + "</td>" +
+          "<td>" + roleCell + "</td>" +
           "</tr>";
       })
       .join("");
@@ -1270,6 +1343,7 @@
           "<td>" + renderAssignment(match) + (hasConflict ? renderConflictBadge() : "") + "</td>" +
           "<td>" + renderSetSummary(match) + "</td>" +
           "<td>" + escapeHtml(winner ? winner.name : "-") + "</td>" +
+          "<td class=\"match-work-col no-print\">" + renderWorkActions(match) + "</td>" +
           "<td class=\"match-update-col\">" + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
           "</tr>";
       })
@@ -1301,6 +1375,17 @@
         return "<li>" + escapeHtml(entry.message) + "</li>";
       })
       .join("") + "</ul>";
+
+    // Work conflicts for the selected division
+    var divisionId = ui.matchDivision.value;
+    if (divisionId) {
+      var workIssues = computeWorkConflicts(divisionId);
+      if (workIssues.length) {
+        ui.matchConflicts.innerHTML += "<h3>Work Assignment Warnings</h3><ul class=\"warning-list\">" +
+          workIssues.map(function (w) { return "<li>" + escapeHtml(w) + "</li>"; }).join("") +
+          "</ul>";
+      }
+    }
   }
 
   function computeScheduleConflicts(matches) {
@@ -1429,6 +1514,7 @@
 
     var rows = computeStandings(divisionId);
     var division = findDivision(divisionId);
+      // ── Work-team assignment engine ───────────────────────────────────────────
     ui.standingsTableBody.innerHTML = rows
       .map(function (row, index) {
         return "<tr>" +
@@ -1439,11 +1525,43 @@
           "<td>" + formatRatio(row.setsWon, row.setsLost) + "</td>" +
           "<td>" + formatRatio(row.pointsFor, row.pointsAgainst) + "</td>" +
           "</tr>";
+        function renderWorkActions(match) {
+          var workTeam = findTeam(match.workTeamId);
+          var isEditing = workEditMatchId === match.id;
       })
+          var label = workTeam
+            ? "<span class=\"work-team-label\">" + escapeHtml(workTeam.name) + "</span>"
+            : "<span class=\"work-team-label muted\">—</span>";
       .join("");
+          var buttons = "<div class=\"work-actions\">" +
+            "<button type=\"button\" class=\"secondary\" data-action=\"edit-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
+            (isEditing ? "Editing…" : (match.workTeamId ? "Change" : "Assign Work")) +
+            "</button>";
 
+          if (match.workTeamId) {
+            buttons += " <button type=\"button\" class=\"secondary\" data-action=\"clear-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">Clear</button>";
+          }
+          buttons += "</div>";
     renderPrintMeta(ui.printMetaStandings, "Standings", division ? ("Division: " + division.name) : "");
+          var picker = "";
+          if (isEditing) {
+            var divisionTeams = getDivisionTeams(match.divisionId);
+            var opts = divisionTeams
+              .filter(function (t) { return t.id !== match.teamAId && t.id !== match.teamBId; })
+              .map(function (t) {
+                var sel = t.id === match.workTeamId ? " selected" : "";
+                return "<option value=\"" + escapeHtml(t.id) + "\"" + sel + ">" + escapeHtml(t.name) + "</option>";
+              }).join("");
+            picker = "<div class=\"work-picker\">" +
+              "<select data-action=\"set-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
+              "<option value=\"\">— none —</option>" + opts +
+              "</select>" +
+              " <button type=\"button\" class=\"secondary\" data-action=\"cancel-work-team\" data-match-id=\"" + escapeHtml(match.id) + "\">Cancel</button>" +
+              "</div>";
+          }
   }
+          return label + buttons + picker;
+        }
 
   function renderBrackets() {
     var divisionId = ui.bracketDivision.value || "";
@@ -1820,7 +1938,8 @@
           status: normalizeImportedStatus(match.status),
           setScores: normalizeImportedSetScores(match.setScores),
           winnerId: winnerId,
-          loserId: loserId
+          loserId: loserId,
+          workTeamId: findTeam(match.workTeamId) ? match.workTeamId : null
         };
       });
   }
@@ -2219,6 +2338,7 @@
       stage: "bracket",
       roundNumber: roundNumber,
       indexInRound: indexInRound,
+        workTeamId: null
       teamAId: teamAId,
       teamBId: teamBId,
       venueId: null,

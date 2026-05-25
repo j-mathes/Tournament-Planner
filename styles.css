@@ -253,6 +253,40 @@ td {
   color: #8e2323;
 }
 
+.tag.work-tag {
+  background: #e0f0fb;
+  color: #1a4a6b;
+}
+
+.match-work-col {
+  min-width: 120px;
+  vertical-align: top;
+}
+
+.work-team-label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+
+.work-team-label.muted {
+  color: var(--muted);
+}
+
+.work-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.work-picker {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+
 .warning-list {
   margin: 0.4rem 0 0;
   padding-left: 1.1rem;
@@ -501,7 +535,8 @@ td {
   .assignment-form,
   .match-actions,
   .score-form,
-  .match-update-col {
+  .match-update-col,
+  .match-work-col {
     display: none !important;
   }
 
