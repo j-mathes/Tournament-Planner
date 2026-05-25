@@ -158,6 +158,8 @@
     ui.generateConsolationBracket = document.getElementById("generate-consolation-bracket");
     ui.clearConsolationBracket = document.getElementById("clear-consolation-bracket");
     ui.generateDoubleElimination = document.getElementById("generate-double-elimination");
+    ui.generateSwissRound = document.getElementById("generate-swiss-round");
+    ui.clearSwissRounds = document.getElementById("clear-swiss-rounds");
     ui.bracketScheduleVenue = document.getElementById("bracket-schedule-venue");
     ui.bracketScheduleStartTime = document.getElementById("bracket-schedule-start-time");
     ui.bracketScheduleSlotMinutes = document.getElementById("bracket-schedule-slot-minutes");
@@ -234,6 +236,8 @@
     ui.generateConsolationBracket.addEventListener("click", handleGenerateConsolationBracket);
     ui.clearConsolationBracket.addEventListener("click", handleClearConsolationBracket);
     ui.generateDoubleElimination.addEventListener("click", handleGenerateDoubleElimination);
+    ui.generateSwissRound.addEventListener("click", handleGenerateSwissRound);
+    ui.clearSwissRounds.addEventListener("click", handleClearSwissRounds);
     ui.autoScheduleBracket.addEventListener("click", handleAutoScheduleBracket);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
@@ -1118,6 +1122,229 @@
       }
       autoAdvanceByeMatch(gf);
     }
+  }
+
+  // ── Swiss System ────────────────────────────────────────────────────────
+
+  function getSwissMatches(divisionId) {
+    return state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === "swiss";
+    });
+  }
+
+  function createSwissMatch(divisionId, roundNumber, indexInRound, teamAId, teamBId) {
+    return {
+      id: createId("match"),
+      divisionId: divisionId,
+      stage: "swiss",
+      roundNumber: roundNumber,
+      indexInRound: indexInRound,
+      teamAId: teamAId || null,
+      teamBId: teamBId || null,
+      venueId: null,
+      courtId: null,
+      startTime: null,
+      durationMinutes: null,
+      status: "scheduled",
+      setScores: [],
+      winnerId: null,
+      loserId: null,
+      workTeamId: null
+    };
+  }
+
+  function getSwissWins(teamId, swissMatches) {
+    return swissMatches.filter(function (m) {
+      return m.status === "completed" && m.winnerId === teamId;
+    }).length;
+  }
+
+  // Returns standings sorted by wins, then Buchholz (sum of opponents' wins).
+  function computeSwissStandings(divisionId) {
+    var teams = getDivisionTeams(divisionId);
+    var swissDone = getSwissMatches(divisionId).filter(function (m) {
+      return m.status === "completed";
+    });
+
+    var wins = {};
+    var losses = {};
+    var opponents = {};
+    teams.forEach(function (t) {
+      wins[t.id] = 0;
+      losses[t.id] = 0;
+      opponents[t.id] = [];
+    });
+
+    swissDone.forEach(function (m) {
+      if (m.teamAId && m.teamBId) {
+        if (!opponents[m.teamAId]) { opponents[m.teamAId] = []; }
+        if (!opponents[m.teamBId]) { opponents[m.teamBId] = []; }
+        opponents[m.teamAId].push(m.teamBId);
+        opponents[m.teamBId].push(m.teamAId);
+      }
+      if (m.winnerId) {
+        wins[m.winnerId] = (wins[m.winnerId] || 0) + 1;
+        var loserId = m.teamAId === m.winnerId ? m.teamBId : m.teamAId;
+        if (loserId) { losses[loserId] = (losses[loserId] || 0) + 1; }
+      }
+    });
+
+    // Buchholz: sum of opponents' win counts
+    var buchholz = {};
+    teams.forEach(function (t) {
+      buchholz[t.id] = (opponents[t.id] || []).reduce(function (sum, oppId) {
+        return sum + (wins[oppId] || 0);
+      }, 0);
+    });
+
+    var sorted = teams.slice().sort(function (a, b) {
+      if ((wins[b.id] || 0) !== (wins[a.id] || 0)) { return (wins[b.id] || 0) - (wins[a.id] || 0); }
+      if ((buchholz[b.id] || 0) !== (buchholz[a.id] || 0)) { return (buchholz[b.id] || 0) - (buchholz[a.id] || 0); }
+      return a.name.localeCompare(b.name);
+    });
+
+    return sorted.map(function (t) {
+      return {
+        team: t,
+        wins: wins[t.id] || 0,
+        losses: losses[t.id] || 0,
+        buchholz: buchholz[t.id] || 0
+      };
+    });
+  }
+
+  // Pair teams for a Swiss round. Returns array of [teamA, teamB|null] pairs.
+  // Teams ordered by current standing (highest first); within each win group,
+  // avoids rematches where possible; floats odd-group team down to next group.
+  function pairTeamsSwiss(orderedTeams, existingSwissMatches) {
+    // Build rematch lookup
+    var played = {};
+    existingSwissMatches.forEach(function (m) {
+      if (m.teamAId && m.teamBId) {
+        played[m.teamAId + "|" + m.teamBId] = true;
+        played[m.teamBId + "|" + m.teamAId] = true;
+      }
+    });
+
+    // Group by win count (among Swiss matches only)
+    var groups = {};
+    orderedTeams.forEach(function (t) {
+      var w = getSwissWins(t.id, existingSwissMatches);
+      if (!groups[w]) { groups[w] = []; }
+      groups[w].push(t);
+    });
+
+    var winCounts = Object.keys(groups).map(Number).sort(function (a, b) { return b - a; });
+    var pairs = [];
+    var floated = null;
+
+    winCounts.forEach(function (wc) {
+      var group = groups[wc].slice();
+      if (floated) {
+        group.unshift(floated);
+        floated = null;
+      }
+
+      var remaining = group.slice();
+      while (remaining.length >= 2) {
+        var teamA = remaining.shift();
+        // Prefer a non-rematch opponent; fall back to first available
+        var oppIdx = -1;
+        for (var j = 0; j < remaining.length; j += 1) {
+          if (!played[teamA.id + "|" + remaining[j].id]) {
+            oppIdx = j;
+            break;
+          }
+        }
+        if (oppIdx === -1) { oppIdx = 0; } // forced rematch
+        var teamB = remaining.splice(oppIdx, 1)[0];
+        pairs.push([teamA, teamB]);
+      }
+
+      if (remaining.length === 1) {
+        floated = remaining[0];
+      }
+    });
+
+    // Last team gets a bye
+    if (floated) {
+      pairs.push([floated, null]);
+    }
+
+    return pairs;
+  }
+
+  function generateSwissRound(divisionId, roundNumber, existingSwissMatches) {
+    var teams = getDivisionTeams(divisionId);
+
+    // Seed: for round 1 use pool standings; for subsequent rounds use Swiss standings
+    var ordered;
+    if (roundNumber === 1) {
+      var poolRows = computeStandings(divisionId);
+      ordered = poolRows.length ? poolRows.map(function (r) { return r.team; }) : teams.slice();
+    } else {
+      ordered = computeSwissStandings(divisionId).map(function (r) { return r.team; });
+    }
+
+    var pairs = pairTeamsSwiss(ordered, existingSwissMatches);
+    var newMatches = pairs.map(function (pair, i) {
+      return createSwissMatch(divisionId, roundNumber, i + 1,
+        pair[0] ? pair[0].id : null,
+        pair[1] ? pair[1].id : null
+      );
+    });
+
+    state.matches = state.matches.concat(newMatches);
+    newMatches.forEach(autoAdvanceByeMatch);
+    saveState();
+    renderAll();
+  }
+
+  function handleGenerateSwissRound() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    var teams = getDivisionTeams(divisionId);
+    if (teams.length < 2) { window.alert("Need at least 2 teams in this division."); return; }
+
+    var existing = getSwissMatches(divisionId);
+
+    if (!existing.length) {
+      generateSwissRound(divisionId, 1, []);
+      return;
+    }
+
+    var roundNums = existing.map(function (m) { return m.roundNumber; });
+    var lastRound = Math.max.apply(null, roundNums);
+    var lastRoundMatches = existing.filter(function (m) { return m.roundNumber === lastRound; });
+    var incomplete = lastRoundMatches.filter(function (m) {
+      return m.status !== "completed" && m.teamAId && m.teamBId;
+    });
+
+    if (incomplete.length > 0) {
+      window.alert("Complete all Round " + lastRound + " matches before generating the next round.");
+      return;
+    }
+
+    generateSwissRound(divisionId, lastRound + 1, existing);
+  }
+
+  function handleClearSwissRounds() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    if (!getSwissMatches(divisionId).length) {
+      window.alert("No Swiss rounds exist for this division.");
+      return;
+    }
+
+    if (!window.confirm("Remove all Swiss rounds for this division? This cannot be undone.")) { return; }
+
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && m.stage === "swiss");
+    });
+    saveState();
+    renderAll();
   }
 
   function handleAutoAssignSchedule() {
@@ -3352,13 +3579,59 @@
 
     var wbLabel = isDE ? "<h3 class=\"winners-bracket-heading\">Winners Bracket</h3>" : "";
 
+    // ── Swiss Rounds ────────────────────────────────────────────────────
+    var swissHtml = "";
+    var swissMatches = getSwissMatches(divisionId);
+    if (swissMatches.length) {
+      var swissRoundGroups = groupBracketRounds(swissMatches);
+      var swissRoundKeys = Object.keys(swissRoundGroups).map(Number).sort(function (a, b) { return a - b; });
+      var lastSwissRound = swissRoundKeys[swissRoundKeys.length - 1];
+
+      var swissSections = swissRoundKeys.map(function (rn) {
+        var rMatches = swissRoundGroups[rn].slice().sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+        var items = rMatches.map(function (match) {
+          var teamA = findTeam(match.teamAId);
+          var teamB = findTeam(match.teamBId);
+          var winner = findTeam(match.winnerId);
+          return "<div class=\"bracket-match\">" +
+            "<strong>" + escapeHtml(teamA ? teamA.name : "BYE") + " vs " + escapeHtml(teamB ? teamB.name : "BYE") + "</strong>" +
+            "<div class=\"bracket-meta\">" + escapeHtml(match.status) +
+            (winner ? " | Winner: " + winner.name : "") +
+            "</div></div>";
+        }).join("");
+        return "<section class=\"bracket-round\"><h3>Round " + rn + "</h3>" + items + "</section>";
+      }).join("");
+
+      // Standing table from Swiss results
+      var swissRows = computeSwissStandings(divisionId);
+      var roundsComplete = swissRoundKeys.every(function (rn) {
+        return swissRoundGroups[rn].every(function (m) {
+          return m.status === "completed" || !m.teamBId; // bye counts as done
+        });
+      });
+      var standingsRows = swissRows.map(function (row, i) {
+        return "<tr><td>" + (i + 1) + "</td><td>" + escapeHtml(row.team.name) +
+          "</td><td>" + row.wins + "-" + row.losses +
+          "</td><td>" + row.buchholz + "</td></tr>";
+      }).join("");
+      var standingsTable = "<h4>Swiss Standings after Round " + lastSwissRound + "</h4>" +
+        "<table class=\"swiss-standings-table\"><thead>" +
+        "<tr><th>#</th><th>Team</th><th>W-L</th><th>Buchholz</th></tr>" +
+        "</thead><tbody>" + standingsRows + "</tbody></table>";
+
+      swissHtml = "<h3 class=\"swiss-bracket-heading\">Swiss System</h3>" +
+        "<div class=\"bracket-grid\">" + swissSections + "</div>" +
+        "<div class=\"swiss-standings\">" + standingsTable + "</div>";
+    }
+
     ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p>" +
       renderBracketIntegrity(integrityIssues, divisionId) +
       wbLabel +
       "<div class=\"bracket-grid\">" + roundHtml + "</div>" +
       lbHtml +
       gfHtml +
-      consolHtml;
+      consolHtml +
+      swissHtml;
     renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
   }
 
