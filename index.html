@@ -18,6 +18,7 @@
         <button class="nav-btn" data-view="teams">Teams</button>
         <button class="nav-btn" data-view="venues">Venues</button>
         <button class="nav-btn" data-view="matches">Matches</button>
+        <button class="nav-btn" data-view="brackets">Brackets</button>
         <button class="nav-btn" data-view="team-schedule">Team Schedule</button>
         <button class="nav-btn" data-view="standings">Standings</button>
         <button class="nav-btn" data-view="public">Public Display</button>
@@ -282,6 +283,18 @@
             <tbody id="standings-table-body"></tbody>
           </table>
         </div>
+      </section>
+
+      <section class="view" id="view-brackets" aria-labelledby="brackets-title">
+        <h2 id="brackets-title">Brackets</h2>
+        <section class="card split-actions no-print">
+          <label>
+            Division
+            <select id="bracket-division"></select>
+          </label>
+          <button id="generate-bracket" type="button">Generate Single Elimination</button>
+        </section>
+        <div class="card" id="bracket-board"></div>
       </section>
 
       <section class="view" id="view-public" aria-labelledby="public-title">

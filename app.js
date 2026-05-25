@@ -86,6 +86,9 @@
     ui.matchConflicts = document.getElementById("match-conflicts");
     ui.matchTableBody = document.getElementById("match-table-body");
     ui.printMetaMatches = document.getElementById("print-meta-matches");
+    ui.bracketDivision = document.getElementById("bracket-division");
+    ui.generateBracket = document.getElementById("generate-bracket");
+    ui.bracketBoard = document.getElementById("bracket-board");
 
     ui.teamScheduleTeam = document.getElementById("team-schedule-team");
     ui.printTeamSchedule = document.getElementById("print-team-schedule");
@@ -131,6 +134,8 @@
     ui.matchStatusFilter.addEventListener("change", renderMatches);
     ui.matchTableBody.addEventListener("submit", handleMatchTableSubmit);
     ui.matchTableBody.addEventListener("click", handleMatchActions);
+    ui.bracketDivision.addEventListener("change", renderBrackets);
+    ui.generateBracket.addEventListener("click", handleGenerateBracket);
 
     ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
     ui.printTeamSchedule.addEventListener("click", handlePrintTeamSchedule);
@@ -469,6 +474,54 @@
     renderAll();
   }
 
+  function handleGenerateBracket() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var teams = getDivisionTeams(divisionId);
+    if (teams.length < 2) {
+      window.alert("Need at least two teams in this division.");
+      return;
+    }
+
+    state.matches = state.matches.filter(function (match) {
+      return !(match.divisionId === divisionId && match.stage === "bracket");
+    });
+
+    var size = nextPowerOfTwo(teams.length);
+    var rounds = Math.log2(size);
+    var seeded = teams.slice();
+    while (seeded.length < size) {
+      seeded.push(null);
+    }
+
+    var roundOneMatches = [];
+    for (var i = 0; i < size; i += 2) {
+      var teamA = seeded[i];
+      var teamB = seeded[i + 1];
+      roundOneMatches.push(createBracketMatch(divisionId, 1, (i / 2) + 1, teamA ? teamA.id : null, teamB ? teamB.id : null));
+    }
+
+    var all = roundOneMatches.slice();
+    var priorRound = roundOneMatches;
+    for (var round = 2; round <= rounds; round += 1) {
+      var currentRound = [];
+      for (var slot = 0; slot < priorRound.length; slot += 2) {
+        currentRound.push(createBracketMatch(divisionId, round, (slot / 2) + 1, null, null));
+      }
+      all = all.concat(currentRound);
+      priorRound = currentRound;
+    }
+
+    state.matches = state.matches.concat(all);
+    recomputeBracketProgression(divisionId);
+    saveState();
+    renderAll();
+  }
+
   function handleAutoAssignSchedule() {
     var divisionId = ui.matchDivision.value;
     if (!divisionId) {
@@ -584,6 +637,9 @@
 
     match.setScores = sets;
     applyMatchOutcome(match);
+    if (match.stage === "bracket") {
+      recomputeBracketProgression(match.divisionId);
+    }
     saveState();
     renderAll();
   }
@@ -681,6 +737,9 @@
     match.winnerId = null;
     match.loserId = null;
     match.status = "scheduled";
+    if (match.stage === "bracket") {
+      recomputeBracketProgression(match.divisionId);
+    }
     saveState();
     renderAll();
   }
@@ -738,6 +797,7 @@
     renderVenues();
     updateMatchCourtFilterOptions();
     renderMatches();
+    renderBrackets();
     renderTeamSchedule();
     renderStandings();
     renderPublicBoard();
@@ -756,6 +816,7 @@
     var selectedScheduleVenue = ui.scheduleVenue.value;
     var selectedVenueFilter = ui.matchVenueFilter.value;
     var selectedScheduleTeam = ui.teamScheduleTeam.value;
+    var selectedBracketDivision = ui.bracketDivision.value;
 
     var divisionOptions = state.divisions.map(function (division) {
       return optionHtml(division.id, division.name);
@@ -764,6 +825,7 @@
     ui.teamDivision.innerHTML = divisionOptions;
     ui.matchDivision.innerHTML = "<option value=\"\">Select division</option>" + divisionOptions;
     ui.standingsDivision.innerHTML = "<option value=\"\">Select division</option>" + divisionOptions;
+    ui.bracketDivision.innerHTML = "<option value=\"\">Select division</option>" + divisionOptions;
 
     var venueOptions = state.venues.map(function (venue) {
       return optionHtml(venue.id, venue.name);
@@ -788,6 +850,7 @@
     restoreSelectValue(ui.scheduleVenue, selectedScheduleVenue);
     restoreSelectValue(ui.matchVenueFilter, selectedVenueFilter);
     restoreSelectValue(ui.teamScheduleTeam, selectedScheduleTeam);
+    restoreSelectValue(ui.bracketDivision, selectedBracketDivision);
   }
 
   function renderTeamSchedule() {
@@ -951,7 +1014,7 @@
         var hasConflict = Boolean(conflictData.byMatchId[match.id]);
 
         return "<tr>" +
-          "<td><strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong><br><small>Round " + match.roundNumber + "</small></td>" +
+          "<td><strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong><br><small>" + escapeHtml(getMatchPhaseLabel(match)) + "</small></td>" +
           "<td>" + renderStatusTag(match.status) + "</td>" +
           "<td>" + renderAssignment(match) + (hasConflict ? renderConflictBadge() : "") + "</td>" +
           "<td>" + renderSetSummary(match) + "</td>" +
@@ -1131,6 +1194,55 @@
     renderPrintMeta(ui.printMetaStandings, "Standings", division ? ("Division: " + division.name) : "");
   }
 
+  function renderBrackets() {
+    var divisionId = ui.bracketDivision.value || "";
+    if (!divisionId) {
+      ui.bracketBoard.innerHTML = "<p>Select a division to view or generate a bracket.</p>";
+      return;
+    }
+
+    var division = findDivision(divisionId);
+    var bracketMatches = getBracketMatches(divisionId);
+    if (!bracketMatches.length) {
+      ui.bracketBoard.innerHTML = "<p>No bracket yet for " + escapeHtml(division ? division.name : "this division") + ". Generate a single-elimination bracket to begin.</p>";
+      return;
+    }
+
+    var rounds = groupBracketRounds(bracketMatches);
+    var roundKeys = Object.keys(rounds).map(function (key) {
+      return parseInt(key, 10);
+    }).sort(function (a, b) {
+      return a - b;
+    });
+
+    var roundHtml = roundKeys.map(function (roundNumber) {
+      var matches = rounds[roundNumber]
+        .slice()
+        .sort(function (a, b) {
+          return a.indexInRound - b.indexInRound;
+        });
+
+      var title = roundNumber === roundKeys.length ? "Final" : ("Round " + roundNumber);
+      var items = matches.map(function (match) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        var winner = findTeam(match.winnerId);
+        return "<div class=\"bracket-match\">" +
+          "<strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong>" +
+          "<div class=\"bracket-meta\">" +
+          escapeHtml(match.status) +
+          (winner ? (" | Winner: " + winner.name) : "") +
+          (match.startTime ? (" | " + formatDateTime(match.startTime)) : "") +
+          "</div>" +
+          "</div>";
+      }).join("");
+
+      return "<section class=\"bracket-round\"><h3>" + escapeHtml(title) + "</h3>" + items + "</section>";
+    }).join("");
+
+    ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p><div class=\"bracket-grid\">" + roundHtml + "</div>";
+  }
+
   function setPrintContext(viewName) {
     document.body.setAttribute("data-print-view", viewName);
   }
@@ -1252,7 +1364,7 @@
   function computeStandings(divisionId) {
     var teams = getDivisionTeams(divisionId);
     var completed = state.matches.filter(function (match) {
-      return match.divisionId === divisionId && match.status === "completed";
+      return match.divisionId === divisionId && match.stage === "pool" && match.status === "completed";
     });
 
     var stats = teams.map(function (team) {
@@ -1410,6 +1522,7 @@
         divisionId: match.divisionId || null,
         stage: match.stage || "pool",
         roundNumber: match.roundNumber || 1,
+        indexInRound: match.indexInRound || 1,
         teamAId: match.teamAId || null,
         teamBId: match.teamBId || null,
         venueId: match.venueId || null,
@@ -1425,6 +1538,7 @@
 
     state = normalized;
     normalizeMatchAssignments();
+    recomputeAllBracketProgression();
     return state;
   }
 
@@ -1452,6 +1566,126 @@
         return team.divisionId === divisionId;
       })
       .sort(compareTeams);
+  }
+
+  function getBracketMatches(divisionId) {
+    return state.matches.filter(function (match) {
+      return match.divisionId === divisionId && match.stage === "bracket";
+    });
+  }
+
+  function groupBracketRounds(matches) {
+    return matches.reduce(function (map, match) {
+      if (!map[match.roundNumber]) {
+        map[match.roundNumber] = [];
+      }
+      map[match.roundNumber].push(match);
+      return map;
+    }, {});
+  }
+
+  function recomputeAllBracketProgression() {
+    state.divisions.forEach(function (division) {
+      recomputeBracketProgression(division.id);
+    });
+  }
+
+  function recomputeBracketProgression(divisionId) {
+    var bracketMatches = getBracketMatches(divisionId);
+    if (!bracketMatches.length) {
+      return;
+    }
+
+    var rounds = groupBracketRounds(bracketMatches);
+    var roundNumbers = Object.keys(rounds).map(function (item) {
+      return parseInt(item, 10);
+    }).sort(function (a, b) {
+      return a - b;
+    });
+
+    roundNumbers.forEach(function (roundNumber) {
+      rounds[roundNumber].sort(function (a, b) {
+        return a.indexInRound - b.indexInRound;
+      });
+    });
+
+    if (rounds[1]) {
+      rounds[1].forEach(autoAdvanceByeMatch);
+    }
+
+    for (var i = 1; i < roundNumbers.length; i += 1) {
+      var current = rounds[roundNumbers[i]];
+      var prior = rounds[roundNumbers[i - 1]];
+      current.forEach(function (match) {
+        var left = prior[(match.indexInRound - 1) * 2];
+        var right = prior[(match.indexInRound - 1) * 2 + 1];
+        var nextTeamA = left ? left.winnerId : null;
+        var nextTeamB = right ? right.winnerId : null;
+        if (match.teamAId !== nextTeamA || match.teamBId !== nextTeamB) {
+          match.teamAId = nextTeamA;
+          match.teamBId = nextTeamB;
+          match.setScores = [];
+          match.winnerId = null;
+          match.loserId = null;
+          match.status = "scheduled";
+        }
+        autoAdvanceByeMatch(match);
+      });
+    }
+  }
+
+  function autoAdvanceByeMatch(match) {
+    if (match.status === "completed") {
+      return;
+    }
+    if (match.teamAId && !match.teamBId) {
+      match.status = "completed";
+      match.winnerId = match.teamAId;
+      match.loserId = null;
+      match.setScores = [];
+      return;
+    }
+    if (match.teamBId && !match.teamAId) {
+      match.status = "completed";
+      match.winnerId = match.teamBId;
+      match.loserId = null;
+      match.setScores = [];
+      return;
+    }
+    if (!match.teamAId || !match.teamBId) {
+      match.status = "scheduled";
+      match.winnerId = null;
+      match.loserId = null;
+      match.setScores = [];
+    }
+  }
+
+  function createBracketMatch(divisionId, roundNumber, indexInRound, teamAId, teamBId) {
+    return {
+      id: createId("match"),
+      divisionId: divisionId,
+      stage: "bracket",
+      roundNumber: roundNumber,
+      indexInRound: indexInRound,
+      teamAId: teamAId,
+      teamBId: teamBId,
+      venueId: null,
+      courtId: null,
+      startTime: null,
+      durationMinutes: null,
+      status: "scheduled",
+      setScores: [],
+      winnerId: null,
+      loserId: null
+    };
+  }
+
+  function nextPowerOfTwo(value) {
+    var size = 1;
+    while (size < value) {
+      size *= 2;
+    }
+    return size;
   }
 
   function compareTeams(left, right) {
@@ -1499,6 +1733,11 @@
 
   function statCard(label, value) {
     return "<div class=\"stat\"><span>" + escapeHtml(label) + "</span><strong>" + value + "</strong></div>";
+  }
+
+  function getMatchPhaseLabel(match) {
+    var stageLabel = match.stage === "bracket" ? "Bracket" : "Pool";
+    return stageLabel + " Round " + match.roundNumber;
   }
 
   function renderStatusTag(status) {

@@ -26,11 +26,17 @@ It is designed to:
   - Auto-assign venue, court, and start time by division
   - Inline per-match assignment editor (Assign / Edit / Clear Assignment)
   - Filter matches by division, venue, court, and status
+  - Match rows identify pool vs bracket phase
   - Scheduling conflict warnings for team overlaps and court overlaps
   - Conflict badges on affected matches
   - Enter set scores
   - Clear match scores
   - Automatic winner and status updates
+- Brackets
+  - Generate single-elimination bracket per division
+  - Auto-advance bye matches
+  - Automatic winner progression to later rounds
+  - Bracket board grouped by rounds
 - Standings
   - Ranking by wins
   - Tiebreakers by set ratio, then point ratio
@@ -109,7 +115,7 @@ Notes:
 ## Roadmap
 
 Planned next improvements:
-- More advanced tournament formats and bracket workflows
+- Additional tournament formats beyond single-elimination
 
 ## License
 
