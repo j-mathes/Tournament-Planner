@@ -263,6 +263,10 @@ td {
   color: #6d2424;
 }
 
+.print-meta {
+  display: none;
+}
+
 .score-form {
   display: flex;
   gap: 0.4rem;
@@ -371,6 +375,8 @@ td {
 @media print {
   body {
     background: #fff;
+    color: #000;
+    font-size: 11pt;
   }
 
   .topbar,
@@ -392,10 +398,49 @@ td {
   }
 
   .view {
-    display: none;
+    display: none !important;
   }
 
-  .view.is-active {
+  body[data-print-view="matches"] #view-matches,
+  body[data-print-view="team-schedule"] #view-team-schedule,
+  body[data-print-view="standings"] #view-standings {
+    display: block !important;
+  }
+
+  .print-meta {
     display: block;
+    margin: 0 0 0.8rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #777;
+  }
+
+  .print-meta h3 {
+    margin: 0 0 0.2rem;
+  }
+
+  .print-meta p {
+    margin: 0.1rem 0;
+    color: #222;
+  }
+
+  .assignment-form,
+  .match-actions,
+  .score-form,
+  .match-update-col {
+    display: none !important;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid #bbb;
+    padding: 0.32rem 0.2rem;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
   }
 }

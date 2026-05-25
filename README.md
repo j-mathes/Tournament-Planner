@@ -44,7 +44,8 @@ It is designed to:
   - Export full app data as JSON
   - Import app data from JSON
 - Printing
-  - Print-friendly active view (Matches and Team Schedule)
+  - Print-friendly schedule and standings output with context header (event, dates, filter/team/division)
+  - Dedicated print actions for Matches, Team Schedule, and Standings
 
 ## Tech Stack
 
@@ -108,7 +109,6 @@ Notes:
 ## Roadmap
 
 Planned next improvements:
-- Improved print layouts for schedules and standings
 - More advanced tournament formats and bracket workflows
 
 ## License

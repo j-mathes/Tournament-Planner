@@ -13,6 +13,7 @@
   function init() {
     cacheDom();
     bindEvents();
+    window.addEventListener("afterprint", clearPrintContext);
     loadState();
     renderAll();
   }
@@ -84,13 +85,17 @@
     ui.matchStatusFilter = document.getElementById("match-status-filter");
     ui.matchConflicts = document.getElementById("match-conflicts");
     ui.matchTableBody = document.getElementById("match-table-body");
+    ui.printMetaMatches = document.getElementById("print-meta-matches");
 
     ui.teamScheduleTeam = document.getElementById("team-schedule-team");
     ui.printTeamSchedule = document.getElementById("print-team-schedule");
     ui.teamScheduleBody = document.getElementById("team-schedule-body");
+    ui.printMetaTeamSchedule = document.getElementById("print-meta-team-schedule");
 
     ui.standingsDivision = document.getElementById("standings-division");
+    ui.printStandings = document.getElementById("print-standings");
     ui.standingsTableBody = document.getElementById("standings-table-body");
+    ui.printMetaStandings = document.getElementById("print-meta-standings");
 
     ui.publicBoard = document.getElementById("public-board");
   }
@@ -117,7 +122,7 @@
     ui.matchDivision.addEventListener("change", renderMatches);
     ui.generateRoundRobin.addEventListener("click", handleGenerateRoundRobin);
     ui.autoAssignSchedule.addEventListener("click", handleAutoAssignSchedule);
-    ui.printSchedule.addEventListener("click", handlePrintSchedule);
+    ui.printSchedule.addEventListener("click", handlePrintMatches);
     ui.matchVenueFilter.addEventListener("change", function () {
       updateMatchCourtFilterOptions();
       renderMatches();
@@ -128,9 +133,10 @@
     ui.matchTableBody.addEventListener("click", handleMatchActions);
 
     ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
-    ui.printTeamSchedule.addEventListener("click", handlePrintSchedule);
+    ui.printTeamSchedule.addEventListener("click", handlePrintTeamSchedule);
 
     ui.standingsDivision.addEventListener("change", renderStandings);
+    ui.printStandings.addEventListener("click", handlePrintStandings);
   }
 
   function handleNavClick(event) {
@@ -508,7 +514,21 @@
     renderAll();
   }
 
-  function handlePrintSchedule() {
+  function handlePrintMatches() {
+    preparePrintMeta("matches");
+    setPrintContext("matches");
+    window.print();
+  }
+
+  function handlePrintTeamSchedule() {
+    preparePrintMeta("team-schedule");
+    setPrintContext("team-schedule");
+    window.print();
+  }
+
+  function handlePrintStandings() {
+    preparePrintMeta("standings");
+    setPrintContext("standings");
     window.print();
   }
 
@@ -774,12 +794,14 @@
     var teamId = ui.teamScheduleTeam.value;
     if (!teamId) {
       ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">Select a team to view schedule.</td></tr>";
+      renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", "Select a team to print a team schedule.");
       return;
     }
 
     var selectedTeam = findTeam(teamId);
     if (!selectedTeam) {
       ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">Selected team was not found.</td></tr>";
+      renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", "Selected team was not found.");
       return;
     }
 
@@ -798,6 +820,7 @@
 
     if (!items.length) {
       ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">No matches scheduled for this team yet.</td></tr>";
+      renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", getTeamSchedulePrintDetail(selectedTeam));
       return;
     }
 
@@ -818,6 +841,8 @@
           "</tr>";
       })
       .join("");
+
+    renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", getTeamSchedulePrintDetail(selectedTeam));
   }
 
   function renderDashboardStats() {
@@ -931,10 +956,13 @@
           "<td>" + renderAssignment(match) + (hasConflict ? renderConflictBadge() : "") + "</td>" +
           "<td>" + renderSetSummary(match) + "</td>" +
           "<td>" + escapeHtml(winner ? winner.name : "-") + "</td>" +
-          "<td>" + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
+          "<td class=\"match-update-col\">" + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
           "</tr>";
       })
       .join("");
+
+      var division = findDivision(divisionId);
+      renderPrintMeta(ui.printMetaMatches, "Match Schedule", division ? ("Division: " + division.name) : "All divisions");
   }
 
   function renderMatchConflicts(filteredMatches, conflictData) {
@@ -1081,10 +1109,12 @@
     var divisionId = ui.standingsDivision.value || "";
     if (!divisionId) {
       ui.standingsTableBody.innerHTML = "";
+      renderPrintMeta(ui.printMetaStandings, "Standings", "Select a division to print standings.");
       return;
     }
 
     var rows = computeStandings(divisionId);
+    var division = findDivision(divisionId);
     ui.standingsTableBody.innerHTML = rows
       .map(function (row, index) {
         return "<tr>" +
@@ -1097,6 +1127,97 @@
           "</tr>";
       })
       .join("");
+
+    renderPrintMeta(ui.printMetaStandings, "Standings", division ? ("Division: " + division.name) : "");
+  }
+
+  function setPrintContext(viewName) {
+    document.body.setAttribute("data-print-view", viewName);
+  }
+
+  function clearPrintContext() {
+    document.body.removeAttribute("data-print-view");
+  }
+
+  function preparePrintMeta(viewName) {
+    if (viewName === "matches") {
+      var division = findDivision(ui.matchDivision.value);
+      var detail = division ? ("Division: " + division.name) : "All divisions";
+      renderPrintMeta(ui.printMetaMatches, "Match Schedule", detail);
+      return;
+    }
+
+    if (viewName === "team-schedule") {
+      var team = findTeam(ui.teamScheduleTeam.value);
+      var teamDetail = team ? getTeamSchedulePrintDetail(team) : "Select a team to print a team schedule.";
+      renderPrintMeta(ui.printMetaTeamSchedule, "Team Schedule", teamDetail);
+      return;
+    }
+
+    if (viewName === "standings") {
+      var standingsDivision = findDivision(ui.standingsDivision.value);
+      var standingsDetail = standingsDivision ? ("Division: " + standingsDivision.name) : "Select a division to print standings.";
+      renderPrintMeta(ui.printMetaStandings, "Standings", standingsDetail);
+    }
+  }
+
+  function renderPrintMeta(target, title, detail) {
+    if (!target) {
+      return;
+    }
+
+    var name = state.tournament.name ? state.tournament.name : "Tournament Planner";
+    var dateLabel = formatTournamentDateRange();
+    var printedAt = "Printed: " + new Date().toLocaleString();
+    var html = [
+      "<h3>" + escapeHtml(title) + "</h3>",
+      "<p><strong>" + escapeHtml(name) + "</strong></p>"
+    ];
+
+    if (dateLabel) {
+      html.push("<p>" + escapeHtml(dateLabel) + "</p>");
+    }
+    if (detail) {
+      html.push("<p>" + escapeHtml(detail) + "</p>");
+    }
+
+    html.push("<p>" + escapeHtml(printedAt) + "</p>");
+    target.innerHTML = html.join("");
+  }
+
+  function getTeamSchedulePrintDetail(team) {
+    var division = findDivision(team.divisionId);
+    if (!division) {
+      return "Team: " + team.name;
+    }
+    return "Team: " + team.name + " | Division: " + division.name;
+  }
+
+  function formatTournamentDateRange() {
+    var start = formatDateOnly(state.tournament.startDate);
+    var end = formatDateOnly(state.tournament.endDate);
+    if (start && end) {
+      return "Dates: " + start + " to " + end;
+    }
+    if (start) {
+      return "Start: " + start;
+    }
+    if (end) {
+      return "End: " + end;
+    }
+    return "";
+  }
+
+  function formatDateOnly(value) {
+    if (!value) {
+      return "";
+    }
+
+    var parsed = new Date(value);
+    if (isNaN(parsed.getTime())) {
+      return "";
+    }
+    return parsed.toLocaleDateString();
   }
 
   function renderPublicBoard() {

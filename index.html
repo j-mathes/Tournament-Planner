@@ -182,6 +182,7 @@
         </section>
         <section class="card no-print" id="match-conflicts" aria-live="polite"></section>
         <div class="card">
+          <div class="print-meta" id="print-meta-matches" aria-hidden="true"></div>
           <table>
             <thead>
               <tr>
@@ -190,7 +191,7 @@
                 <th>Assignment</th>
                 <th>Sets</th>
                 <th>Winner</th>
-                <th>Update</th>
+                <th class="match-update-col">Update</th>
               </tr>
             </thead>
             <tbody id="match-table-body"></tbody>
@@ -239,6 +240,7 @@
           <button id="print-team-schedule" type="button" class="secondary">Print Team Schedule</button>
         </section>
         <div class="card">
+          <div class="print-meta" id="print-meta-team-schedule" aria-hidden="true"></div>
           <table>
             <thead>
               <tr>
@@ -257,13 +259,15 @@
 
       <section class="view" id="view-standings" aria-labelledby="standings-title">
         <h2 id="standings-title">Standings</h2>
-        <section class="card split-actions">
+        <section class="card split-actions no-print">
           <label>
             Division
             <select id="standings-division"></select>
           </label>
+          <button id="print-standings" type="button" class="secondary">Print Standings</button>
         </section>
         <div class="card">
+          <div class="print-meta" id="print-meta-standings" aria-hidden="true"></div>
           <table>
             <thead>
               <tr>
