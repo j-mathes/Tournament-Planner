@@ -157,6 +157,7 @@
     ui.generateBracketStandings = document.getElementById("generate-bracket-standings");
     ui.generateConsolationBracket = document.getElementById("generate-consolation-bracket");
     ui.clearConsolationBracket = document.getElementById("clear-consolation-bracket");
+    ui.generateDoubleElimination = document.getElementById("generate-double-elimination");
     ui.bracketScheduleVenue = document.getElementById("bracket-schedule-venue");
     ui.bracketScheduleStartTime = document.getElementById("bracket-schedule-start-time");
     ui.bracketScheduleSlotMinutes = document.getElementById("bracket-schedule-slot-minutes");
@@ -232,6 +233,7 @@
     ui.generateBracketStandings.addEventListener("click", handleGenerateBracketFromStandings);
     ui.generateConsolationBracket.addEventListener("click", handleGenerateConsolationBracket);
     ui.clearConsolationBracket.addEventListener("click", handleClearConsolationBracket);
+    ui.generateDoubleElimination.addEventListener("click", handleGenerateDoubleElimination);
     ui.autoScheduleBracket.addEventListener("click", handleAutoScheduleBracket);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
@@ -662,7 +664,9 @@
     }
 
     state.matches = state.matches.filter(function (match) {
-      return !(match.divisionId === divisionId && match.stage === "bracket");
+      return !(match.divisionId === divisionId && (
+        match.stage === "bracket" || match.stage === "losers" || match.stage === "grand-final"
+      ));
     });
 
     var generated = buildSingleEliminationMatches(divisionId, teams);
@@ -789,6 +793,11 @@
       return;
     }
 
+    if (getLosersMatches(divisionId).length > 0) {
+      window.alert("Cannot add a consolation bracket to a double elimination format.");
+      return;
+    }
+
     var realR1 = mainR1.filter(function (m) { return m.teamAId || m.teamBId; });
     if (realR1.length < 2) {
       window.alert("Need at least 2 first-round matches with teams assigned to generate a consolation bracket.");
@@ -887,6 +896,227 @@
         }
         autoAdvanceByeMatch(match);
       });
+    }
+  }
+
+  // ── Double Elimination ──────────────────────────────────────────────────
+
+  function getLosersMatches(divisionId) {
+    return state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === "losers";
+    });
+  }
+
+  function getGrandFinalMatches(divisionId) {
+    return state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === "grand-final";
+    });
+  }
+
+  function createLosersMatch(divisionId, roundNumber, indexInRound, teamAId, teamBId) {
+    return {
+      id: createId("match"),
+      divisionId: divisionId,
+      stage: "losers",
+      roundNumber: roundNumber,
+      indexInRound: indexInRound,
+      teamAId: teamAId || null,
+      teamBId: teamBId || null,
+      venueId: null,
+      courtId: null,
+      startTime: null,
+      durationMinutes: null,
+      status: "scheduled",
+      setScores: [],
+      winnerId: null,
+      loserId: null,
+      workTeamId: null
+    };
+  }
+
+  function createGrandFinalMatch(divisionId) {
+    return {
+      id: createId("match"),
+      divisionId: divisionId,
+      stage: "grand-final",
+      roundNumber: 1,
+      indexInRound: 1,
+      teamAId: null,
+      teamBId: null,
+      venueId: null,
+      courtId: null,
+      startTime: null,
+      durationMinutes: null,
+      status: "scheduled",
+      setScores: [],
+      winnerId: null,
+      loserId: null,
+      workTeamId: null
+    };
+  }
+
+  // Build the shell of a Losers Bracket for a bracket of size B (power of 2).
+  // LB has 2*(n-1) rounds where n=log2(B).
+  // Round r match count = B / 2^(ceil(r/2)+1)
+  function buildLosersMatches(divisionId, B) {
+    var n = Math.round(Math.log2(B));
+    var lbRounds = 2 * (n - 1);
+    var all = [];
+    for (var r = 1; r <= lbRounds; r += 1) {
+      var matchCount = Math.round(B / Math.pow(2, Math.ceil(r / 2) + 1));
+      for (var i = 0; i < matchCount; i += 1) {
+        all.push(createLosersMatch(divisionId, r, i + 1, null, null));
+      }
+    }
+    return all;
+  }
+
+  function generateDoubleEliminationForTeams(divisionId, teams) {
+    if (teams.length < 2) { return; }
+
+    // Clear all bracket-type matches for this division
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && (
+        m.stage === "bracket" || m.stage === "losers" ||
+        m.stage === "grand-final" || m.stage === "consolation"
+      ));
+    });
+
+    var B = nextPowerOfTwo(teams.length);
+    var wbMatches = buildSingleEliminationMatches(divisionId, teams);
+    var lbMatches = buildLosersMatches(divisionId, B);
+    var gfMatch = createGrandFinalMatch(divisionId);
+
+    state.matches = state.matches.concat(wbMatches).concat(lbMatches).concat([gfMatch]);
+    recomputeBracketProgression(divisionId);
+    saveState();
+    renderAll();
+  }
+
+  function handleGenerateDoubleElimination() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var teams = getDivisionTeams(divisionId);
+    if (teams.length < 3) {
+      window.alert("Need at least 3 teams for double elimination.");
+      return;
+    }
+
+    var hasExisting = getBracketMatches(divisionId).length > 0 ||
+      getLosersMatches(divisionId).length > 0;
+    if (hasExisting && !window.confirm(
+      "Replace the existing bracket for this division? All bracket match results will be lost."
+    )) {
+      return;
+    }
+
+    generateDoubleEliminationForTeams(divisionId, teams);
+  }
+
+  // Propagate results through the Losers Bracket and into the Grand Final.
+  // Called at the end of recomputeBracketProgression whenever LB matches exist.
+  function recomputeLosersProgression(divisionId) {
+    var lbMatches = getLosersMatches(divisionId);
+    if (!lbMatches.length) { return; }
+
+    var wbMatches = getBracketMatches(divisionId);
+    if (!wbMatches.length) { return; }
+
+    var wbRounds = groupBracketRounds(wbMatches);
+    var wbRoundNums = Object.keys(wbRounds).map(Number).sort(function (a, b) { return a - b; });
+    var lbRounds = groupBracketRounds(lbMatches);
+    var lbRoundNums = Object.keys(lbRounds).map(Number).sort(function (a, b) { return a - b; });
+
+    wbRoundNums.forEach(function (rn) {
+      wbRounds[rn].sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+    });
+    lbRoundNums.forEach(function (rn) {
+      lbRounds[rn].sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+    });
+
+    lbRoundNums.forEach(function (r) {
+      var lbR = lbRounds[r];
+
+      if (r === 1) {
+        // LB R1 is fed by pairs of WB R1 losers
+        var wbR1 = (wbRounds[1] || []).filter(function (m) { return m.teamAId || m.teamBId; });
+        lbR.forEach(function (match, i) {
+          var srcA = wbR1[i * 2] || null;
+          var srcB = wbR1[i * 2 + 1] || null;
+          var tA = srcA ? (srcA.loserId || null) : null;
+          var tB = srcB ? (srcB.loserId || null) : null;
+          if (match.teamAId !== tA || match.teamBId !== tB) {
+            match.teamAId = tA;
+            match.teamBId = tB;
+            match.setScores = [];
+            match.winnerId = null;
+            match.loserId = null;
+            match.status = "scheduled";
+          }
+          autoAdvanceByeMatch(match);
+        });
+
+      } else if (r % 2 === 0) {
+        // Even "dropout" round: LB R(r-1) winners (slot A) + WB R(r/2+1) losers (slot B)
+        var wbK = r / 2 + 1;
+        var wbDrop = (wbRounds[wbK] || []);
+        var lbPrev = (lbRounds[r - 1] || []);
+        lbR.forEach(function (match, i) {
+          var tA = lbPrev[i] ? (lbPrev[i].winnerId || null) : null;
+          var tB = wbDrop[i] ? (wbDrop[i].loserId || null) : null;
+          if (match.teamAId !== tA || match.teamBId !== tB) {
+            match.teamAId = tA;
+            match.teamBId = tB;
+            match.setScores = [];
+            match.winnerId = null;
+            match.loserId = null;
+            match.status = "scheduled";
+          }
+          autoAdvanceByeMatch(match);
+        });
+
+      } else {
+        // Odd consolidation round (r > 1): pairs of LB R(r-1) winners
+        var lbPrev = (lbRounds[r - 1] || []);
+        lbR.forEach(function (match, i) {
+          var left = lbPrev[i * 2] || null;
+          var right = lbPrev[i * 2 + 1] || null;
+          var tA = left ? (left.winnerId || null) : null;
+          var tB = right ? (right.winnerId || null) : null;
+          if (match.teamAId !== tA || match.teamBId !== tB) {
+            match.teamAId = tA;
+            match.teamBId = tB;
+            match.setScores = [];
+            match.winnerId = null;
+            match.loserId = null;
+            match.status = "scheduled";
+          }
+          autoAdvanceByeMatch(match);
+        });
+      }
+    });
+
+    // Populate Grand Final: WB champion (slot A) vs LB champion (slot B)
+    var gfList = getGrandFinalMatches(divisionId);
+    if (gfList.length) {
+      var gf = gfList[0];
+      var wbFinal = wbRounds[wbRoundNums[wbRoundNums.length - 1]] || [];
+      var lbFinal = lbRounds[lbRoundNums[lbRoundNums.length - 1]] || [];
+      var wbChamp = wbFinal.length ? (wbFinal[0].winnerId || null) : null;
+      var lbChamp = lbFinal.length ? (lbFinal[0].winnerId || null) : null;
+      if (gf.teamAId !== wbChamp || gf.teamBId !== lbChamp) {
+        gf.teamAId = wbChamp;
+        gf.teamBId = lbChamp;
+        gf.setScores = [];
+        gf.winnerId = null;
+        gf.loserId = null;
+        gf.status = "scheduled";
+      }
+      autoAdvanceByeMatch(gf);
     }
   }
 
@@ -2994,6 +3224,7 @@
 
     var rounds = groupBracketRounds(bracketMatches);
     var integrityIssues = computeBracketIntegrityIssues(divisionId);
+    var isDE = getLosersMatches(divisionId).length > 0;
     var roundKeys = Object.keys(rounds).map(function (key) {
       return parseInt(key, 10);
     }).sort(function (a, b) {
@@ -3007,7 +3238,16 @@
           return a.indexInRound - b.indexInRound;
         });
 
-      var title = roundNumber === roundKeys.length ? "Final" : ("Round " + roundNumber);
+      var title;
+      if (isDE) {
+        title = roundNumber === roundKeys.length ? "WB Final" :
+          (roundNumber === roundKeys.length - 1 && roundKeys.length > 2 ? "WB Semifinal" :
+            "WB Round " + roundNumber);
+      } else {
+        title = roundNumber === roundKeys.length ? "Final" :
+          (roundNumber === roundKeys.length - 1 && roundKeys.length > 2 ? "Semifinal" :
+            "Round " + roundNumber);
+      }
       var items = matches.map(function (match) {
         var teamA = findTeam(match.teamAId);
         var teamB = findTeam(match.teamBId);
@@ -3060,9 +3300,64 @@
         "<div class=\"bracket-grid\">" + consolSections + "</div>";
     }
 
+    // ── Losers Bracket (Double Elimination) ─────────────────────────────
+    var lbHtml = "";
+    var lbMatches = getLosersMatches(divisionId);
+    if (lbMatches.length) {
+      var lbRounds = groupBracketRounds(lbMatches);
+      var lbKeys = Object.keys(lbRounds).map(function (k) { return parseInt(k, 10); }).sort(function (a, b) { return a - b; });
+      var totalLbRounds = lbKeys.length;
+
+      var lbSections = lbKeys.map(function (rn) {
+        var lbRMatches = lbRounds[rn].slice().sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+        var lbTitle = rn === totalLbRounds ? "LB Final" :
+          (rn === totalLbRounds - 1 && totalLbRounds > 2 ? "LB Semifinal" : "LB Round " + rn);
+        var items = lbRMatches.map(function (match) {
+          var teamA = findTeam(match.teamAId);
+          var teamB = findTeam(match.teamBId);
+          var winner = findTeam(match.winnerId);
+          return "<div class=\"bracket-match\">" +
+            "<strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong>" +
+            "<div class=\"bracket-meta\">" + escapeHtml(match.status) +
+            (winner ? " | Winner: " + winner.name : "") +
+            (match.startTime ? " | " + formatDateTime(match.startTime) : "") +
+            "</div></div>";
+        }).join("");
+        return "<section class=\"bracket-round\"><h3>" + escapeHtml(lbTitle) + "</h3>" + items + "</section>";
+      }).join("");
+
+      lbHtml = "<h3 class=\"losers-bracket-heading\">Losers Bracket</h3>" +
+        "<div class=\"bracket-grid\">" + lbSections + "</div>";
+    }
+
+    // ── Grand Final ──────────────────────────────────────────────────────
+    var gfHtml = "";
+    var gfList = getGrandFinalMatches(divisionId);
+    if (gfList.length) {
+      var gf = gfList[0];
+      var teamA = findTeam(gf.teamAId);
+      var teamB = findTeam(gf.teamBId);
+      var winner = findTeam(gf.winnerId);
+      var gfMatchHtml = "<div class=\"bracket-match\">" +
+        "<strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong>" +
+        "<div class=\"bracket-meta\">" + escapeHtml(gf.status) +
+        (winner ? " | Winner: " + winner.name : "") +
+        (gf.startTime ? " | " + formatDateTime(gf.startTime) : "") +
+        "</div></div>";
+      gfHtml = "<h3 class=\"grand-final-heading\">Grand Final</h3>" +
+        "<div class=\"bracket-grid\"><section class=\"bracket-round\"><h3>Grand Final</h3>" +
+        gfMatchHtml + "</section></div>" +
+        (winner ? "<p class=\"grand-final-champion\">Champion: <strong>" + escapeHtml(winner.name) + "</strong></p>" : "");
+    }
+
+    var wbLabel = isDE ? "<h3 class=\"winners-bracket-heading\">Winners Bracket</h3>" : "";
+
     ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p>" +
       renderBracketIntegrity(integrityIssues, divisionId) +
+      wbLabel +
       "<div class=\"bracket-grid\">" + roundHtml + "</div>" +
+      lbHtml +
+      gfHtml +
       consolHtml;
     renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
   }
@@ -3936,6 +4231,7 @@
       });
     }
     recomputeConsolationProgression(divisionId);
+    recomputeLosersProgression(divisionId);
   }
 
   function autoAdvanceByeMatch(match) {

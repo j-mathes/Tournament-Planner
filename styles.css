@@ -476,6 +476,30 @@ td {
   padding-top: 1rem;
 }
 
+.winners-bracket-heading,
+.losers-bracket-heading {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.losers-bracket-heading,
+.grand-final-heading {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.grand-final-heading {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.grand-final-champion {
+  margin-top: 0.75rem;
+  font-size: 1.05rem;
+}
+
 .bracket-round {
   border: 1px solid var(--border);
   border-radius: 10px;
