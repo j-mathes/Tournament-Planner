@@ -1362,6 +1362,7 @@
     }
 
     var rounds = groupBracketRounds(bracketMatches);
+    var integrityIssues = computeBracketIntegrityIssues(divisionId);
     var roundKeys = Object.keys(rounds).map(function (key) {
       return parseInt(key, 10);
     }).sort(function (a, b) {
@@ -1393,8 +1394,22 @@
       return "<section class=\"bracket-round\"><h3>" + escapeHtml(title) + "</h3>" + items + "</section>";
     }).join("");
 
-    ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p><div class=\"bracket-grid\">" + roundHtml + "</div>";
+    ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p>" +
+      renderBracketIntegrity(integrityIssues) +
+      "<div class=\"bracket-grid\">" + roundHtml + "</div>";
     renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
+  }
+
+  function renderBracketIntegrity(issues) {
+    if (!issues.length) {
+      return "<section class=\"bracket-integrity\"><p><span class=\"tag complete\">valid</span> Bracket integrity checks passed.</p></section>";
+    }
+
+    return "<section class=\"bracket-integrity\"><p><span class=\"tag warning\">warning</span> Bracket integrity issues detected.</p><ul class=\"warning-list\">" +
+      issues.map(function (item) {
+        return "<li>" + escapeHtml(item) + "</li>";
+      }).join("") +
+      "</ul></section>";
   }
 
   function setPrintContext(viewName) {
@@ -1839,6 +1854,100 @@
       map[match.roundNumber].push(match);
       return map;
     }, {});
+  }
+
+  function computeBracketIntegrityIssues(divisionId) {
+    var bracketMatches = getBracketMatches(divisionId);
+    if (!bracketMatches.length) {
+      return [];
+    }
+
+    var issues = [];
+    var rounds = groupBracketRounds(bracketMatches);
+    var roundNumbers = Object.keys(rounds).map(function (item) {
+      return parseInt(item, 10);
+    }).sort(function (a, b) {
+      return a - b;
+    });
+
+    if (roundNumbers.length) {
+      var finalRound = rounds[roundNumbers[roundNumbers.length - 1]] || [];
+      if (finalRound.length !== 1) {
+        issues.push("Final round should contain exactly one match.");
+      }
+    }
+
+    for (var i = 0; i < roundNumbers.length; i += 1) {
+      var roundNumber = roundNumbers[i];
+      var matches = rounds[roundNumber] || [];
+      var teamsInRound = {};
+
+      matches.forEach(function (match) {
+        if (match.teamAId && match.teamAId === match.teamBId) {
+          issues.push("Round " + roundNumber + ": a match has the same team on both sides.");
+        }
+
+        [match.teamAId, match.teamBId].forEach(function (teamId) {
+          if (!teamId) {
+            return;
+          }
+
+          if (teamsInRound[teamId]) {
+            var team = findTeam(teamId);
+            issues.push("Round " + roundNumber + ": " + (team ? team.name : "Unknown team") + " appears in multiple matches.");
+            return;
+          }
+          teamsInRound[teamId] = true;
+        });
+
+        if (match.status === "completed" && !match.winnerId) {
+          issues.push("Round " + roundNumber + ": a completed match is missing a winner.");
+        }
+
+        if (match.winnerId && match.winnerId !== match.teamAId && match.winnerId !== match.teamBId) {
+          issues.push("Round " + roundNumber + ": a match winner is not one of the scheduled teams.");
+        }
+      });
+
+      if (i > 0) {
+        var prevRoundMatches = rounds[roundNumbers[i - 1]] || [];
+        var expectedCount = Math.ceil(prevRoundMatches.length / 2);
+        if (matches.length !== expectedCount) {
+          issues.push("Round " + roundNumber + ": expected " + expectedCount + " matches based on previous round, found " + matches.length + ".");
+        }
+      }
+    }
+
+    var divisionTeams = getDivisionTeams(divisionId);
+    var firstRound = rounds[roundNumbers[0]] || [];
+    var firstRoundTeamIds = {};
+    firstRound.forEach(function (match) {
+      if (match.teamAId) {
+        firstRoundTeamIds[match.teamAId] = true;
+      }
+      if (match.teamBId) {
+        firstRoundTeamIds[match.teamBId] = true;
+      }
+    });
+
+    divisionTeams.forEach(function (team) {
+      if (!firstRoundTeamIds[team.id]) {
+        issues.push("First round is missing team: " + team.name + ".");
+      }
+    });
+
+    return dedupeStrings(issues);
+  }
+
+  function dedupeStrings(values) {
+    var seen = {};
+    return values.filter(function (value) {
+      if (seen[value]) {
+        return false;
+      }
+      seen[value] = true;
+      return true;
+    });
   }
 
   function recomputeAllBracketProgression() {

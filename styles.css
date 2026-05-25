@@ -355,6 +355,18 @@ td {
   color: var(--muted);
 }
 
+.bracket-integrity {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.65rem;
+  margin: 0 0 0.8rem;
+}
+
+.bracket-integrity p {
+  margin: 0;
+}
+
 @keyframes fade {
   from {
     opacity: 0;

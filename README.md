@@ -38,6 +38,7 @@ It is designed to:
   - Auto-advance bye matches
   - Automatic winner progression to later rounds
   - Bracket board grouped by rounds
+  - Bracket integrity validation warnings (duplicates, malformed rounds, missing teams, invalid winners)
   - Bracket print workflow
   - Division-specific bracket JSON export
   - Division-specific bracket JSON import
