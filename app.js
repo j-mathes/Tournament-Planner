@@ -553,7 +553,7 @@
     }
 
     var action = button.getAttribute("data-action");
-    if (action !== "clear-score") {
+    if (action !== "clear-score" && action !== "edit-assignment" && action !== "clear-assignment") {
       return;
     }
 
@@ -562,6 +562,20 @@
       return item.id === matchId;
     });
     if (!match) {
+      return;
+    }
+
+    if (action === "edit-assignment") {
+      openAssignmentEditor(match);
+      return;
+    }
+
+    if (action === "clear-assignment") {
+      match.venueId = null;
+      match.courtId = null;
+      match.startTime = null;
+      saveState();
+      renderAll();
       return;
     }
 
@@ -771,10 +785,17 @@
           "<td>" + renderAssignment(match) + "</td>" +
           "<td>" + renderSetSummary(match) + "</td>" +
           "<td>" + escapeHtml(winner ? winner.name : "-") + "</td>" +
-          "<td>" + renderScoreForm(match) + "</td>" +
+          "<td>" + renderAssignmentActions(match) + renderScoreForm(match) + "</td>" +
           "</tr>";
       })
       .join("");
+  }
+
+  function renderAssignmentActions(match) {
+    return "<div class=\"match-actions\">" +
+      "<button type=\"button\" class=\"secondary\" data-action=\"edit-assignment\" data-match-id=\"" + escapeHtml(match.id) + "\">Assign</button> " +
+      "<button type=\"button\" class=\"secondary\" data-action=\"clear-assignment\" data-match-id=\"" + escapeHtml(match.id) + "\">Clear Assignment</button>" +
+      "</div>";
   }
 
   function renderStandings() {
@@ -1207,6 +1228,89 @@
       return "Unscheduled time";
     }
     return date.toLocaleString();
+  }
+
+  function openAssignmentEditor(match) {
+    if (!state.venues.length) {
+      window.alert("Add at least one venue before assigning matches.");
+      return;
+    }
+
+    var venuePrompt = state.venues.map(function (venue, index) {
+      return (index + 1) + ": " + venue.name;
+    }).join("\n");
+
+    var venueInput = window.prompt("Choose venue number:\n" + venuePrompt);
+    if (venueInput === null) {
+      return;
+    }
+
+    var venueIndex = parseInt(venueInput, 10) - 1;
+    var venue = state.venues[venueIndex];
+    if (!venue) {
+      window.alert("Invalid venue selection.");
+      return;
+    }
+
+    if (!venue.courts.length) {
+      window.alert("Selected venue has no courts.");
+      return;
+    }
+
+    var courtPrompt = venue.courts.map(function (court, index) {
+      return (index + 1) + ": " + court.label;
+    }).join("\n");
+
+    var courtInput = window.prompt("Choose court number for " + venue.name + ":\n" + courtPrompt);
+    if (courtInput === null) {
+      return;
+    }
+
+    var courtIndex = parseInt(courtInput, 10) - 1;
+    var court = venue.courts[courtIndex];
+    if (!court) {
+      window.alert("Invalid court selection.");
+      return;
+    }
+
+    var existingLocalTime = "";
+    if (match.startTime) {
+      existingLocalTime = toLocalDateTimeInput(match.startTime);
+    }
+
+    var timeInput = window.prompt(
+      "Enter start time in local format YYYY-MM-DDTHH:mm\nExample: 2026-05-25T09:00",
+      existingLocalTime
+    );
+    if (timeInput === null) {
+      return;
+    }
+
+    var parsedDate = new Date(timeInput);
+    if (isNaN(parsedDate.getTime())) {
+      window.alert("Invalid date/time format.");
+      return;
+    }
+
+    match.venueId = venue.id;
+    match.courtId = court.id;
+    match.startTime = parsedDate.toISOString();
+    saveState();
+    renderAll();
+  }
+
+  function toLocalDateTimeInput(isoText) {
+    var date = new Date(isoText);
+    if (isNaN(date.getTime())) {
+      return "";
+    }
+
+    var year = String(date.getFullYear());
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    var hours = String(date.getHours()).padStart(2, "0");
+    var minutes = String(date.getMinutes()).padStart(2, "0");
+    return year + "-" + month + "-" + day + "T" + hours + ":" + minutes;
   }
 
   function createId(prefix) {

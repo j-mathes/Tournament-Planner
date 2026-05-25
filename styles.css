@@ -255,6 +255,13 @@ td {
   flex-wrap: wrap;
 }
 
+.match-actions {
+  margin-bottom: 0.35rem;
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
 .score-form label {
   font-size: 0.84rem;
 }

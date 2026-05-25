@@ -18,8 +18,14 @@ It is designed to:
   - Add, edit, delete teams
   - Assign teams to divisions
   - Optional team seed
+- Venue and court management
+  - Add, edit, delete venues
+  - Define multiple courts per venue
 - Match management
   - Generate round-robin matches per division
+  - Auto-assign venue, court, and start time by division
+  - Manual per-match assignment override (Assign / Clear Assignment)
+  - Filter matches by division, venue, court, and status
   - Enter set scores
   - Clear match scores
   - Automatic winner and status updates
@@ -28,9 +34,12 @@ It is designed to:
   - Tiebreakers by set ratio, then point ratio
 - Public display
   - Upcoming and active matches board
+  - Includes assignment context (venue, court, time)
 - Data handling
   - Export full app data as JSON
   - Import app data from JSON
+- Printing
+  - Print-friendly active view (Schedule/Matches flow)
 
 ## Tech Stack
 
@@ -71,6 +80,13 @@ Then open http://localhost:8080.
 
 All working data is saved to localStorage under a versioned key.
 
+Stored data currently includes:
+- Tournament metadata
+- Divisions
+- Teams
+- Venues and courts
+- Matches, assignments, and scores
+
 Notes:
 - Data is browser-specific
 - Clearing browser storage will remove saved data
@@ -81,14 +97,15 @@ Notes:
 - No multi-user synchronization
 - No backend APIs
 - No authentication
-- Scheduling is currently basic round-robin generation
+- Scheduling uses simple slot sequencing and court rotation (no advanced constraint solver)
+- Manual match assignment currently uses prompt-based input flow
 
 ## Roadmap
 
 Planned next improvements:
-- Court and time assignment for matches
-- Schedule filtering by venue and court
-- Print-friendly schedules and standings
+- Inline per-match assignment editor (replace prompt flow)
+- Team schedule view with team filter and print workflow
+- Improved print layouts for schedules and standings
 - More advanced tournament formats and bracket workflows
 
 ## License
