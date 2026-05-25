@@ -35,11 +35,14 @@ It is designed to:
 - Public display
   - Upcoming and active matches board
   - Includes assignment context (venue, court, time)
+- Team schedule
+  - Team-specific schedule view with team filter
+  - Team schedule print workflow
 - Data handling
   - Export full app data as JSON
   - Import app data from JSON
 - Printing
-  - Print-friendly active view (Schedule/Matches flow)
+  - Print-friendly active view (Matches and Team Schedule)
 
 ## Tech Stack
 
@@ -103,7 +106,6 @@ Notes:
 ## Roadmap
 
 Planned next improvements:
-- Team schedule view with team filter and print workflow
 - Improved print layouts for schedules and standings
 - Scheduling conflict detection and warnings
 - More advanced tournament formats and bracket workflows

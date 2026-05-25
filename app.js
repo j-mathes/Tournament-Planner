@@ -83,6 +83,10 @@
     ui.matchStatusFilter = document.getElementById("match-status-filter");
     ui.matchTableBody = document.getElementById("match-table-body");
 
+    ui.teamScheduleTeam = document.getElementById("team-schedule-team");
+    ui.printTeamSchedule = document.getElementById("print-team-schedule");
+    ui.teamScheduleBody = document.getElementById("team-schedule-body");
+
     ui.standingsDivision = document.getElementById("standings-division");
     ui.standingsTableBody = document.getElementById("standings-table-body");
 
@@ -120,6 +124,9 @@
     ui.matchStatusFilter.addEventListener("change", renderMatches);
     ui.matchTableBody.addEventListener("submit", handleMatchTableSubmit);
     ui.matchTableBody.addEventListener("click", handleMatchActions);
+
+    ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
+    ui.printTeamSchedule.addEventListener("click", handlePrintSchedule);
 
     ui.standingsDivision.addEventListener("change", renderStandings);
   }
@@ -609,7 +616,7 @@
     }
 
     var action = button.getAttribute("data-action");
-    if (action !== "clear-score" && action !== "edit-assignment" && action !== "clear-assignment") {
+    if (action !== "clear-score" && action !== "edit-assignment" && action !== "clear-assignment" && action !== "cancel-assignment") {
       return;
     }
 
@@ -704,6 +711,7 @@
     renderVenues();
     updateMatchCourtFilterOptions();
     renderMatches();
+    renderTeamSchedule();
     renderStandings();
     renderPublicBoard();
   }
@@ -720,6 +728,7 @@
     var selectedTeamDivision = ui.teamDivision.value;
     var selectedScheduleVenue = ui.scheduleVenue.value;
     var selectedVenueFilter = ui.matchVenueFilter.value;
+    var selectedScheduleTeam = ui.teamScheduleTeam.value;
 
     var divisionOptions = state.divisions.map(function (division) {
       return optionHtml(division.id, division.name);
@@ -735,11 +744,73 @@
     ui.scheduleVenue.innerHTML = "<option value=\"\">Select venue</option>" + venueOptions;
     ui.matchVenueFilter.innerHTML = "<option value=\"\">All venues</option>" + venueOptions;
 
+    var teamOptions = state.teams
+      .slice()
+      .sort(compareTeams)
+      .map(function (team) {
+        var division = findDivision(team.divisionId);
+        var label = team.name + (division ? " (" + division.name + ")" : "");
+        return optionHtml(team.id, label);
+      })
+      .join("");
+    ui.teamScheduleTeam.innerHTML = "<option value=\"\">Select team</option>" + teamOptions;
+
     restoreSelectValue(ui.teamDivision, selectedTeamDivision);
     restoreSelectValue(ui.matchDivision, selectedMatchDivision);
     restoreSelectValue(ui.standingsDivision, selectedStandingsDivision);
     restoreSelectValue(ui.scheduleVenue, selectedScheduleVenue);
     restoreSelectValue(ui.matchVenueFilter, selectedVenueFilter);
+    restoreSelectValue(ui.teamScheduleTeam, selectedScheduleTeam);
+  }
+
+  function renderTeamSchedule() {
+    var teamId = ui.teamScheduleTeam.value;
+    if (!teamId) {
+      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">Select a team to view schedule.</td></tr>";
+      return;
+    }
+
+    var selectedTeam = findTeam(teamId);
+    if (!selectedTeam) {
+      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">Selected team was not found.</td></tr>";
+      return;
+    }
+
+    var items = state.matches
+      .filter(function (match) {
+        return match.teamAId === teamId || match.teamBId === teamId;
+      })
+      .sort(function (a, b) {
+        var ta = a.startTime || "9999";
+        var tb = b.startTime || "9999";
+        if (ta !== tb) {
+          return ta.localeCompare(tb);
+        }
+        return a.roundNumber - b.roundNumber;
+      });
+
+    if (!items.length) {
+      ui.teamScheduleBody.innerHTML = "<tr><td colspan=\"6\">No matches scheduled for this team yet.</td></tr>";
+      return;
+    }
+
+    ui.teamScheduleBody.innerHTML = items
+      .map(function (match) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        var division = findDivision(match.divisionId);
+        var venue = findVenue(match.venueId);
+        var court = findCourt(match.venueId, match.courtId);
+        return "<tr>" +
+          "<td>" + escapeHtml(match.startTime ? formatDateTime(match.startTime) : "Unscheduled") + "</td>" +
+          "<td>" + escapeHtml((teamA ? teamA.name : "TBD") + " vs " + (teamB ? teamB.name : "TBD")) + "</td>" +
+          "<td>" + escapeHtml(division ? division.name : "-") + "</td>" +
+          "<td>" + escapeHtml(venue ? venue.name : "-") + "</td>" +
+          "<td>" + escapeHtml(court ? court.label : "-") + "</td>" +
+          "<td>" + renderStatusTag(match.status) + "</td>" +
+          "</tr>";
+      })
+      .join("");
   }
 
   function renderDashboardStats() {

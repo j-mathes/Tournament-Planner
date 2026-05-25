@@ -18,6 +18,7 @@
         <button class="nav-btn" data-view="teams">Teams</button>
         <button class="nav-btn" data-view="venues">Venues</button>
         <button class="nav-btn" data-view="matches">Matches</button>
+        <button class="nav-btn" data-view="team-schedule">Team Schedule</button>
         <button class="nav-btn" data-view="standings">Standings</button>
         <button class="nav-btn" data-view="public">Public Display</button>
       </nav>
@@ -223,6 +224,32 @@
               </tr>
             </thead>
             <tbody id="venue-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-team-schedule" aria-labelledby="team-schedule-title">
+        <h2 id="team-schedule-title">Team Schedule</h2>
+        <section class="card split-actions no-print">
+          <label>
+            Team
+            <select id="team-schedule-team"></select>
+          </label>
+          <button id="print-team-schedule" type="button" class="secondary">Print Team Schedule</button>
+        </section>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Start</th>
+                <th>Match</th>
+                <th>Division</th>
+                <th>Venue</th>
+                <th>Court</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="team-schedule-body"></tbody>
           </table>
         </div>
       </section>
