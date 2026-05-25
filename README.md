@@ -56,6 +56,12 @@ It is designed to:
   - Score entry form shows correct number of set inputs and placeholders for the format
   - Soft score validation warns if set scores don't match format rules (target points, win-by-two, cap)
   - Auto-scheduling uses format duration when no manual duration is set
+- Printing and exporting
+  - Court schedule print — matches grouped by venue and court, with work team and format, for posting at each court
+  - Work assignment sheet print — division-filtered list of all work team assignments
+  - CSV export for match schedule (division, stage, round, teams, venue, court, time, format, status, sets, winner, work team)
+  - CSV export for standings
+  - Final results summary on the Standings view — shows division champion (from completed bracket) and ranked standings
   - Division-specific bracket JSON export
   - Division-specific bracket JSON import
 - Standings

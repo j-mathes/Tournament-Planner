@@ -409,6 +409,52 @@ td {
   margin: 0;
 }
 
+.court-schedule-section {
+  margin-bottom: 1.5rem;
+}
+
+.court-schedule-section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0.3rem;
+}
+
+#court-schedule-board,
+#work-sheet-board {
+  display: none;
+}
+
+#court-schedule-board:not(:empty),
+#work-sheet-board:not(:empty) {
+  display: block;
+}
+
+.final-results {
+  padding: 0.1rem 0;
+}
+
+.champion-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.1rem;
+  margin-bottom: 0.8rem;
+  padding: 0.5rem 0.75rem;
+  background: #fffbe6;
+  border: 1px solid #f0c040;
+  border-radius: 8px;
+}
+
+.final-standings-list {
+  margin: 0.4rem 0 0 1.2rem;
+  padding: 0;
+}
+
+.final-standings-list li {
+  margin-bottom: 0.25rem;
+}
+
 .bracket-repair-actions {
   display: flex;
   flex-wrap: wrap;
@@ -520,8 +566,20 @@ td {
   body[data-print-view="matches"] #view-matches,
   body[data-print-view="team-schedule"] #view-team-schedule,
   body[data-print-view="standings"] #view-standings,
-  body[data-print-view="brackets"] #view-brackets {
+  body[data-print-view="brackets"] #view-brackets,
+  body[data-print-view="court-schedule"] #view-matches,
+  body[data-print-view="work-sheet"] #view-matches {
     display: block !important;
+  }
+
+  /* For court-schedule and work-sheet prints, hide the main match card and show only the target board */
+  body[data-print-view="court-schedule"] .card:not(#court-schedule-board),
+  body[data-print-view="court-schedule"] section.no-print,
+  body[data-print-view="court-schedule"] #match-conflicts,
+  body[data-print-view="work-sheet"] .card:not(#work-sheet-board),
+  body[data-print-view="work-sheet"] section.no-print,
+  body[data-print-view="work-sheet"] #match-conflicts {
+    display: none !important;
   }
 
   .print-meta {

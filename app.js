@@ -125,6 +125,13 @@
     ui.autoAssignSchedule = document.getElementById("auto-assign-schedule");
     ui.autoAssignWorkTeams = document.getElementById("auto-assign-work-teams");
     ui.printSchedule = document.getElementById("print-schedule");
+    ui.printCourtSchedule = document.getElementById("print-court-schedule");
+    ui.printWorkSheet = document.getElementById("print-work-sheet");
+    ui.exportMatchesCsv = document.getElementById("export-matches-csv");
+    ui.exportStandingsCsv = document.getElementById("export-standings-csv");
+    ui.courtScheduleBoard = document.getElementById("court-schedule-board");
+    ui.workSheetBoard = document.getElementById("work-sheet-board");
+    ui.finalResultsBoard = document.getElementById("final-results-board");
     ui.matchVenueFilter = document.getElementById("match-venue-filter");
     ui.matchCourtFilter = document.getElementById("match-court-filter");
     ui.matchStatusFilter = document.getElementById("match-status-filter");
@@ -183,6 +190,10 @@
     ui.autoAssignSchedule.addEventListener("click", handleAutoAssignSchedule);
     ui.autoAssignWorkTeams.addEventListener("click", handleAutoAssignWorkTeams);
     ui.printSchedule.addEventListener("click", handlePrintMatches);
+    ui.printCourtSchedule.addEventListener("click", handlePrintCourtSchedule);
+    ui.printWorkSheet.addEventListener("click", handlePrintWorkSheet);
+    ui.exportMatchesCsv.addEventListener("click", handleExportMatchesCsv);
+    ui.exportStandingsCsv.addEventListener("click", handleExportStandingsCsv);
     ui.matchVenueFilter.addEventListener("change", function () {
       updateMatchCourtFilterOptions();
       renderMatches();
@@ -204,7 +215,7 @@
     ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
     ui.printTeamSchedule.addEventListener("click", handlePrintTeamSchedule);
 
-    ui.standingsDivision.addEventListener("change", renderStandings);
+    ui.standingsDivision.addEventListener("change", function() { renderStandings(); renderFinalResults(); });
     ui.printStandings.addEventListener("click", handlePrintStandings);
   }
 
@@ -760,6 +771,250 @@
     renderAll();
   }
 
+  // ── Spec 11: Court Schedule, Work Sheet, CSV Export, Final Results ───────
+
+  function renderCourtSchedule() {
+    var divisionId = ui.matchDivision.value || "";
+    var venueId = ui.matchVenueFilter.value || "";
+
+    var matches = state.matches
+      .filter(function (m) {
+        return m.venueId && m.courtId &&
+          (!divisionId || m.divisionId === divisionId) &&
+          (!venueId || m.venueId === venueId);
+      })
+      .sort(function (a, b) {
+        var ta = a.startTime || "";
+        var tb = b.startTime || "";
+        return ta.localeCompare(tb) || a.roundNumber - b.roundNumber;
+      });
+
+    if (!matches.length) {
+      ui.courtScheduleBoard.innerHTML = "";
+      return;
+    }
+
+    // group by venueId then courtId
+    var grouped = {};
+    matches.forEach(function (m) {
+      var key = m.venueId + "|" + m.courtId;
+      if (!grouped[key]) { grouped[key] = []; }
+      grouped[key].push(m);
+    });
+
+    var html = "<div class='print-meta' id='print-meta-court-schedule'></div><h3>Court Schedule</h3>";
+    Object.keys(grouped).forEach(function (key) {
+      var courtMatches = grouped[key];
+      var venue = findVenue(courtMatches[0].venueId);
+      var court = findCourt(courtMatches[0].venueId, courtMatches[0].courtId);
+      html += "<section class='court-schedule-section'>" +
+        "<h4>" + escapeHtml((venue ? venue.name : "") + " \u2014 " + (court ? court.label : "")) + "</h4>" +
+        "<table><thead><tr>" +
+        "<th>Time</th><th>Match</th><th>Division</th><th>Format</th><th>Status</th><th>Work Team</th>" +
+        "</tr></thead><tbody>";
+      courtMatches.forEach(function (m) {
+        var teamA = findTeam(m.teamAId);
+        var teamB = findTeam(m.teamBId);
+        var division = findDivision(m.divisionId);
+        var workTeam = findTeam(m.workTeamId);
+        var fmt = getFormatForMatch(m);
+        html += "<tr>" +
+          "<td>" + escapeHtml(m.startTime ? formatDateTime(m.startTime) : "TBD") + "</td>" +
+          "<td><strong>" + escapeHtml((teamA ? teamA.name : "TBD") + " vs " + (teamB ? teamB.name : "TBD")) + "</strong></td>" +
+          "<td>" + escapeHtml(division ? division.name : "\u2014") + "</td>" +
+          "<td>" + escapeHtml(fmt ? fmt.name : "\u2014") + "</td>" +
+          "<td>" + renderStatusTag(m.status) + "</td>" +
+          "<td>" + escapeHtml(workTeam ? workTeam.name : "\u2014") + "</td>" +
+          "</tr>";
+      });
+      html += "</tbody></table></section>";
+    });
+
+    ui.courtScheduleBoard.innerHTML = html;
+    renderPrintMeta(document.getElementById("print-meta-court-schedule"), "Court Schedule",
+      (findDivision(divisionId) ? findDivision(divisionId).name + " \u2014 " : "") +
+      (findVenue(venueId) ? findVenue(venueId).name : "All venues"));
+  }
+
+  function renderWorkSheet() {
+    var divisionId = ui.matchDivision.value || "";
+
+    var matches = state.matches
+      .filter(function (m) {
+        return m.workTeamId && (!divisionId || m.divisionId === divisionId);
+      })
+      .sort(function (a, b) {
+        var ta = a.startTime || "";
+        var tb = b.startTime || "";
+        return ta.localeCompare(tb) || a.roundNumber - b.roundNumber;
+      });
+
+    if (!matches.length) {
+      ui.workSheetBoard.innerHTML = "";
+      return;
+    }
+
+    var rows = matches.map(function (m) {
+      var teamA = findTeam(m.teamAId);
+      var teamB = findTeam(m.teamBId);
+      var division = findDivision(m.divisionId);
+      var venue = findVenue(m.venueId);
+      var court = findCourt(m.venueId, m.courtId);
+      var workTeam = findTeam(m.workTeamId);
+      return "<tr>" +
+        "<td>" + escapeHtml(m.startTime ? formatDateTime(m.startTime) : "TBD") + "</td>" +
+        "<td>" + escapeHtml((teamA ? teamA.name : "TBD") + " vs " + (teamB ? teamB.name : "TBD")) + "</td>" +
+        "<td>" + escapeHtml(division ? division.name : "\u2014") + "</td>" +
+        "<td>" + escapeHtml(venue ? venue.name : "\u2014") + "</td>" +
+        "<td>" + escapeHtml(court ? court.label : "\u2014") + "</td>" +
+        "<td><strong>" + escapeHtml(workTeam ? workTeam.name : "\u2014") + "</strong></td>" +
+        "</tr>";
+    }).join("");
+
+    ui.workSheetBoard.innerHTML =
+      "<div class='print-meta' id='print-meta-work-sheet'></div>" +
+      "<h3>Work Assignments</h3>" +
+      "<table><thead><tr>" +
+      "<th>Time</th><th>Match</th><th>Division</th><th>Venue</th><th>Court</th><th>Work Team</th>" +
+      "</tr></thead><tbody>" + rows + "</tbody></table>";
+
+    renderPrintMeta(document.getElementById("print-meta-work-sheet"), "Work Assignments",
+      findDivision(divisionId) ? ("Division: " + findDivision(divisionId).name) : "All divisions");
+  }
+
+  function renderFinalResults() {
+    if (!ui.finalResultsBoard) { return; }
+    var divisionId = ui.standingsDivision.value || "";
+    if (!divisionId) {
+      ui.finalResultsBoard.innerHTML = "";
+      return;
+    }
+
+    var bracketMatches = getBracketMatches(divisionId);
+    var champion = null;
+    if (bracketMatches.length) {
+      var rounds = groupBracketRounds(bracketMatches);
+      var roundNumbers = Object.keys(rounds).map(function (k) { return parseInt(k, 10); }).sort(function (a, b) { return a - b; });
+      var finalRound = rounds[roundNumbers[roundNumbers.length - 1]] || [];
+      if (finalRound.length === 1 && finalRound[0].winnerId) {
+        champion = findTeam(finalRound[0].winnerId);
+      }
+    }
+
+    var standings = computeStandings(divisionId);
+    var html = "<div class='final-results'>";
+    if (champion) {
+      html += "<div class='champion-banner'><span class='tag complete'>\uD83C\uDFC6 Champion</span> <strong>" + escapeHtml(champion.name) + "</strong></div>";
+    }
+    if (standings.length) {
+      html += "<h4>Final Standings</h4><ol class='final-standings-list'>";
+      standings.forEach(function (row) {
+        html += "<li>" + escapeHtml(row.team.name) +
+          " <small>(" + row.wins + "W\u2013" + row.losses + "L)</small></li>";
+      });
+      html += "</ol>";
+    }
+    html += "</div>";
+    ui.finalResultsBoard.innerHTML = standings.length || champion ? html : "";
+  }
+
+  function handlePrintCourtSchedule() {
+    renderCourtSchedule();
+    if (!ui.courtScheduleBoard.innerHTML) {
+      window.alert("No assigned matches to display. Assign venues and courts to matches first.");
+      return;
+    }
+    setPrintContext("court-schedule");
+    window.print();
+    clearPrintContext();
+  }
+
+  function handlePrintWorkSheet() {
+    renderWorkSheet();
+    if (!ui.workSheetBoard.innerHTML) {
+      window.alert("No work assignments to print. Auto-assign or manually assign work teams first.");
+      return;
+    }
+    setPrintContext("work-sheet");
+    window.print();
+    clearPrintContext();
+  }
+
+  function handleExportMatchesCsv() {
+    var divisionId = ui.matchDivision.value || "";
+    var rows = state.matches
+      .filter(function (m) { return !divisionId || m.divisionId === divisionId; })
+      .map(function (m) {
+        var teamA = findTeam(m.teamAId);
+        var teamB = findTeam(m.teamBId);
+        var winner = findTeam(m.winnerId);
+        var division = findDivision(m.divisionId);
+        var venue = findVenue(m.venueId);
+        var court = findCourt(m.venueId, m.courtId);
+        var workTeam = findTeam(m.workTeamId);
+        var fmt = getFormatForMatch(m);
+        var sets = m.setScores.map(function (s) { return s.teamAScore + "-" + s.teamBScore; }).join(" | ");
+        return [
+          csvCell(division ? division.name : ""),
+          csvCell(m.stage),
+          csvCell(m.roundNumber),
+          csvCell(teamA ? teamA.name : "TBD"),
+          csvCell(teamB ? teamB.name : "TBD"),
+          csvCell(venue ? venue.name : ""),
+          csvCell(court ? court.label : ""),
+          csvCell(m.startTime ? formatDateTime(m.startTime) : ""),
+          csvCell(fmt ? fmt.name : ""),
+          csvCell(m.status),
+          csvCell(sets),
+          csvCell(winner ? winner.name : ""),
+          csvCell(workTeam ? workTeam.name : "")
+        ].join(",");
+      });
+    var header = "Division,Stage,Round,Team A,Team B,Venue,Court,Start Time,Format,Status,Sets,Winner,Work Team";
+    downloadCsv("matches.csv", header + "\n" + rows.join("\n"));
+  }
+
+  function handleExportStandingsCsv() {
+    var divisionId = ui.standingsDivision.value || "";
+    if (!divisionId) {
+      window.alert("Select a division first.");
+      return;
+    }
+    var division = findDivision(divisionId);
+    var rows = computeStandings(divisionId).map(function (row, i) {
+      return [
+        csvCell(i + 1),
+        csvCell(row.team.name),
+        csvCell(row.wins),
+        csvCell(row.losses),
+        csvCell(row.setsWon + "-" + row.setsLost),
+        csvCell(row.pointsFor + "-" + row.pointsAgainst)
+      ].join(",");
+    });
+    var header = "Rank,Team,Wins,Losses,Sets,Points";
+    downloadCsv((division ? division.name.replace(/\s+/g, "_") : "division") + "_standings.csv",
+      header + "\n" + rows.join("\n"));
+  }
+
+  function csvCell(value) {
+    var s = String(value === null || value === undefined ? "" : value);
+    if (s.indexOf(",") !== -1 || s.indexOf('"') !== -1 || s.indexOf("\n") !== -1) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function downloadCsv(filename, content) {
+    var blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   function handlePrintMatches() {
     preparePrintMeta("matches");
     setPrintContext("matches");

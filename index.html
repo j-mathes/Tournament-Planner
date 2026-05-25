@@ -172,6 +172,9 @@
             <button id="auto-assign-schedule" type="button">Auto Assign Courts/Times</button>
             <button id="auto-assign-work-teams" type="button">Auto Assign Work Teams</button>
             <button id="print-schedule" type="button" class="secondary">Print Schedule</button>
+            <button id="print-court-schedule" type="button" class="secondary">Print Court Schedule</button>
+            <button id="print-work-sheet" type="button" class="secondary">Print Work Sheet</button>
+            <button id="export-matches-csv" type="button" class="secondary">Export Matches CSV</button>
           </div>
         </section>
         <section class="card form-grid no-print" aria-label="Match Filters">
@@ -211,6 +214,8 @@
             <tbody id="match-table-body"></tbody>
           </table>
         </div>
+        <div class="card" id="court-schedule-board" aria-live="polite"></div>
+        <div class="card" id="work-sheet-board" aria-live="polite"></div>
       </section>
 
       <section class="view" id="view-venues" aria-labelledby="venues-title">
@@ -280,7 +285,9 @@
             <select id="standings-division"></select>
           </label>
           <button id="print-standings" type="button" class="secondary">Print Standings</button>
+          <button id="export-standings-csv" type="button" class="secondary">Export Standings CSV</button>
         </section>
+        <div class="card" id="final-results-board"></div>
         <div class="card">
           <div class="print-meta" id="print-meta-standings" aria-hidden="true"></div>
           <table>
