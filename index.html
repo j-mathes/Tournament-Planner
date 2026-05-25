@@ -329,6 +329,23 @@
             <button id="auto-schedule-bracket" type="button" class="secondary">Auto-Schedule Bracket</button>
           </div>
         </section>
+        <section class="card no-print" id="pool-crossover-card">
+          <h2>Pool Play &amp; Placement</h2>
+          <div class="form-grid">
+            <label>
+              Number of pools
+              <input id="pool-count" type="number" min="2" max="16" value="4">
+            </label>
+          </div>
+          <div class="form-actions" style="margin-top:0.5rem">
+            <button id="auto-split-pools" type="button" class="secondary">Auto-Split Teams</button>
+            <button id="generate-pool-matches-pools" type="button" class="secondary">Generate Pool Matches</button>
+            <button id="generate-crossovers-btn" type="button" class="secondary">Generate Crossovers</button>
+            <button id="generate-placement-btn" type="button" class="secondary">Generate Placement Brackets</button>
+            <button id="clear-pools-btn" type="button" class="secondary danger">Clear Pools &amp; Placement</button>
+          </div>
+          <div id="pool-assignment-board" style="margin-top:0.75rem"></div>
+        </section>
         <div class="card">
           <div class="print-meta" id="print-meta-brackets" aria-hidden="true"></div>
           <div id="bracket-board"></div>

@@ -77,6 +77,7 @@
       teams: [],
       venues: [],
       matches: [],
+      pools: [],
       auditLog: []
     };
   }
@@ -160,6 +161,13 @@
     ui.generateDoubleElimination = document.getElementById("generate-double-elimination");
     ui.generateSwissRound = document.getElementById("generate-swiss-round");
     ui.clearSwissRounds = document.getElementById("clear-swiss-rounds");
+    ui.poolCount = document.getElementById("pool-count");
+    ui.autoSplitPools = document.getElementById("auto-split-pools");
+    ui.generatePoolMatchesPools = document.getElementById("generate-pool-matches-pools");
+    ui.generateCrossoversBtnUi = document.getElementById("generate-crossovers-btn");
+    ui.generatePlacementBtn = document.getElementById("generate-placement-btn");
+    ui.clearPoolsBtn = document.getElementById("clear-pools-btn");
+    ui.poolAssignmentBoard = document.getElementById("pool-assignment-board");
     ui.bracketScheduleVenue = document.getElementById("bracket-schedule-venue");
     ui.bracketScheduleStartTime = document.getElementById("bracket-schedule-start-time");
     ui.bracketScheduleSlotMinutes = document.getElementById("bracket-schedule-slot-minutes");
@@ -238,6 +246,11 @@
     ui.generateDoubleElimination.addEventListener("click", handleGenerateDoubleElimination);
     ui.generateSwissRound.addEventListener("click", handleGenerateSwissRound);
     ui.clearSwissRounds.addEventListener("click", handleClearSwissRounds);
+    ui.autoSplitPools.addEventListener("click", handleAutoSplitPools);
+    ui.generatePoolMatchesPools.addEventListener("click", handleGeneratePoolMatchesPools);
+    ui.generateCrossoversBtnUi.addEventListener("click", handleGenerateCrossovers);
+    ui.generatePlacementBtn.addEventListener("click", handleGeneratePlacement);
+    ui.clearPoolsBtn.addEventListener("click", handleClearPoolsAndPlacement);
     ui.autoScheduleBracket.addEventListener("click", handleAutoScheduleBracket);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
@@ -1347,6 +1360,429 @@
     renderAll();
   }
 
+  // ── Pool Play / Crossover / Full Placement ──────────────────────────────
+
+  function getPools(divisionId) {
+    return state.pools.filter(function (p) { return p.divisionId === divisionId; });
+  }
+
+  function getCrossoverMatches(divisionId) {
+    return state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === "crossover";
+    });
+  }
+
+  // Compute standings for a subset of teams using only matches where both teams
+  // are in the given teamIds list.
+  function computePoolStandingsForTeams(teamIds, allCompletedPoolMatches) {
+    var poolMatches = allCompletedPoolMatches.filter(function (m) {
+      return teamIds.indexOf(m.teamAId) >= 0 && teamIds.indexOf(m.teamBId) >= 0;
+    });
+
+    var stats = {};
+    teamIds.forEach(function (id) {
+      stats[id] = { teamId: id, wins: 0, losses: 0, setsWon: 0, setsLost: 0, pointsFor: 0, pointsAgainst: 0 };
+    });
+
+    poolMatches.forEach(function (m) {
+      var a = stats[m.teamAId];
+      var b = stats[m.teamBId];
+      if (!a || !b) { return; }
+      m.setScores.forEach(function (set) {
+        a.pointsFor += set.teamAScore;
+        a.pointsAgainst += set.teamBScore;
+        b.pointsFor += set.teamBScore;
+        b.pointsAgainst += set.teamAScore;
+        if (set.teamAScore > set.teamBScore) { a.setsWon += 1; b.setsLost += 1; }
+        else if (set.teamBScore > set.teamAScore) { b.setsWon += 1; a.setsLost += 1; }
+      });
+      if (m.winnerId === m.teamAId) { a.wins += 1; b.losses += 1; }
+      else if (m.winnerId === m.teamBId) { b.wins += 1; a.losses += 1; }
+    });
+
+    return teamIds.map(function (id) { return stats[id]; }).sort(function (a, b) {
+      if (b.wins !== a.wins) { return b.wins - a.wins; }
+      var aS = calcRatio(a.setsWon, a.setsLost), bS = calcRatio(b.setsWon, b.setsLost);
+      if (aS !== bS) { return bS - aS; }
+      return calcRatio(b.pointsFor, b.pointsAgainst) - calcRatio(a.pointsFor, a.pointsAgainst);
+    });
+  }
+
+  // Rank all teams in a division cross-pool: all 1st-place teams (sorted by
+  // record), then all 2nd-place, etc. Falls back to division standings if no
+  // pools are configured.
+  function rankTeamsCrossPool(divisionId) {
+    var pools = getPools(divisionId);
+    if (!pools.length) {
+      return computeStandings(divisionId).map(function (r) { return r.team; });
+    }
+
+    var completedPoolMatches = state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === "pool" && m.status === "completed";
+    });
+
+    var allPoolStandings = pools.map(function (pool) {
+      return computePoolStandingsForTeams(pool.teamIds, completedPoolMatches);
+    });
+
+    var maxDepth = allPoolStandings.reduce(function (mx, ps) { return Math.max(mx, ps.length); }, 0);
+    var ranked = [];
+
+    for (var pos = 0; pos < maxDepth; pos += 1) {
+      var teamsAtPos = [];
+      allPoolStandings.forEach(function (ps) {
+        if (ps[pos]) { teamsAtPos.push(ps[pos]); }
+      });
+      teamsAtPos.sort(function (a, b) {
+        if (b.wins !== a.wins) { return b.wins - a.wins; }
+        var aS = calcRatio(a.setsWon, a.setsLost), bS = calcRatio(b.setsWon, b.setsLost);
+        if (aS !== bS) { return bS - aS; }
+        return calcRatio(b.pointsFor, b.pointsAgainst) - calcRatio(a.pointsFor, a.pointsAgainst);
+      });
+      ranked = ranked.concat(teamsAtPos);
+    }
+
+    return ranked.map(function (stat) { return findTeam(stat.teamId); }).filter(Boolean);
+  }
+
+  // Distribute division teams into N pools using snake-draft ordering.
+  function handleAutoSplitPools() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    var count = parseInt(ui.poolCount.value, 10);
+    if (!count || count < 2) { window.alert("Enter at least 2 pools."); return; }
+
+    var teams = getDivisionTeams(divisionId);
+    if (teams.length < count * 2) {
+      window.alert("Need at least " + (count * 2) + " teams for " + count + " pools.");
+      return;
+    }
+
+    state.pools = state.pools.filter(function (p) { return p.divisionId !== divisionId; });
+
+    var letters = "ABCDEFGHIJKLMNOP";
+    var pools = [];
+    for (var i = 0; i < count; i += 1) {
+      pools.push({ id: createId("pool"), divisionId: divisionId, name: "Pool " + (letters[i] || (i + 1)), teamIds: [] });
+    }
+
+    // Snake draft: round 0 → 0,1,...,N-1; round 1 → N-1,...,1,0; alternating
+    teams.forEach(function (team, idx) {
+      var round = Math.floor(idx / count);
+      var pos = idx % count;
+      var poolIdx = round % 2 === 0 ? pos : count - 1 - pos;
+      pools[poolIdx].teamIds.push(team.id);
+    });
+
+    state.pools = state.pools.concat(pools);
+    saveState();
+    renderBrackets();
+  }
+
+  // Generate round-robin matches within each pool (clears existing pool matches).
+  function handleGeneratePoolMatchesPools() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    var pools = getPools(divisionId);
+    if (!pools.length) { window.alert("Set up pools first using Auto-Split Teams."); return; }
+
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && m.stage === "pool");
+    });
+
+    var allNew = [];
+    pools.forEach(function (pool) {
+      var teams = pool.teamIds.map(function (id) { return findTeam(id); }).filter(Boolean);
+      var roundNum = 0;
+      for (var i = 0; i < teams.length; i += 1) {
+        for (var j = i + 1; j < teams.length; j += 1) {
+          roundNum += 1;
+          allNew.push({
+            id: createId("match"), divisionId: divisionId, poolId: pool.id,
+            stage: "pool", roundNumber: roundNum, indexInRound: 1,
+            teamAId: teams[i].id, teamBId: teams[j].id,
+            venueId: null, courtId: null, startTime: null, durationMinutes: null,
+            status: "scheduled", setScores: [], winnerId: null, loserId: null, workTeamId: null
+          });
+        }
+      }
+    });
+
+    state.matches = state.matches.concat(allNew);
+    saveState();
+    renderAll();
+  }
+
+  // Generate crossover matches: seed 1 vs seed N, 2 vs N-1, etc.
+  function handleGenerateCrossovers() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    var ranked = rankTeamsCrossPool(divisionId);
+    if (ranked.length < 4) {
+      window.alert("Need at least 4 ranked teams to generate crossovers. Complete pool play first.");
+      return;
+    }
+
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && (
+        m.stage === "crossover" || m.stage === "placement-champ" || m.stage === "placement-consol"
+      ));
+    });
+
+    var N = ranked.length;
+    var half = Math.floor(N / 2);
+    var newMatches = [];
+    for (var i = 0; i < half; i += 1) {
+      newMatches.push({
+        id: createId("match"), divisionId: divisionId, stage: "crossover",
+        roundNumber: 1, indexInRound: i + 1,
+        teamAId: ranked[i].id, teamBId: ranked[N - 1 - i].id,
+        venueId: null, courtId: null, startTime: null, durationMinutes: null,
+        status: "scheduled", setScores: [], winnerId: null, loserId: null, workTeamId: null
+      });
+    }
+
+    state.matches = state.matches.concat(newMatches);
+    saveState();
+    renderBrackets();
+  }
+
+  // Build a placement bracket shell (all null slots) for a given side/stage.
+  function buildPlacementBracket(divisionId, stage, slotCount) {
+    var size = nextPowerOfTwo(slotCount);
+    var rounds = Math.round(Math.log2(size));
+    var r1 = [];
+    for (var i = 0; i < size / 2; i += 1) {
+      r1.push({ id: createId("match"), divisionId: divisionId, stage: stage,
+        roundNumber: 1, indexInRound: i + 1,
+        teamAId: null, teamBId: null, venueId: null, courtId: null,
+        startTime: null, durationMinutes: null, status: "scheduled",
+        setScores: [], winnerId: null, loserId: null, workTeamId: null });
+    }
+    var all = r1.slice();
+    var prior = r1;
+    for (var round = 2; round <= rounds; round += 1) {
+      var curr = [];
+      for (var slot = 0; slot < prior.length; slot += 2) {
+        curr.push({ id: createId("match"), divisionId: divisionId, stage: stage,
+          roundNumber: round, indexInRound: Math.floor(slot / 2) + 1,
+          teamAId: null, teamBId: null, venueId: null, courtId: null,
+          startTime: null, durationMinutes: null, status: "scheduled",
+          setScores: [], winnerId: null, loserId: null, workTeamId: null });
+      }
+      all = all.concat(curr);
+      prior = curr;
+    }
+    return all;
+  }
+
+  // Generate full-placement brackets (championship + consolation) from crossovers.
+  function handleGeneratePlacement() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    var crossoverList = getCrossoverMatches(divisionId);
+    if (!crossoverList.length) {
+      window.alert("Generate crossover matches first.");
+      return;
+    }
+
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && (
+        m.stage === "placement-champ" || m.stage === "placement-consol"
+      ));
+    });
+
+    var N = crossoverList.length;
+    var champMatches = buildPlacementBracket(divisionId, "placement-champ", N);
+    var consolMatches = buildPlacementBracket(divisionId, "placement-consol", N);
+    state.matches = state.matches.concat(champMatches).concat(consolMatches);
+    recomputePlacementProgression(divisionId);
+    saveState();
+    renderBrackets();
+  }
+
+  // Propagate crossover results into both placement brackets and advance them.
+  function recomputePlacementProgression(divisionId) {
+    var crossoverList = getCrossoverMatches(divisionId)
+      .sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+    if (!crossoverList.length) { return; }
+
+    [
+      { stage: "placement-champ", field: "winnerId" },
+      { stage: "placement-consol", field: "loserId" }
+    ].forEach(function (side) {
+      var pMatches = state.matches.filter(function (m) {
+        return m.divisionId === divisionId && m.stage === side.stage;
+      });
+      if (!pMatches.length) { return; }
+
+      var rounds = groupBracketRounds(pMatches);
+      var roundNums = Object.keys(rounds).map(Number).sort(function (a, b) { return a - b; });
+      roundNums.forEach(function (rn) { rounds[rn].sort(function (a, b) { return a.indexInRound - b.indexInRound; }); });
+
+      if (rounds[1]) {
+        rounds[1].forEach(function (match, i) {
+          var srcA = crossoverList[i * 2] || null;
+          var srcB = crossoverList[i * 2 + 1] || null;
+          var tA = srcA ? (srcA[side.field] || null) : null;
+          var tB = srcB ? (srcB[side.field] || null) : null;
+          if (match.teamAId !== tA || match.teamBId !== tB) {
+            match.teamAId = tA; match.teamBId = tB;
+            match.setScores = []; match.winnerId = null;
+            match.loserId = null; match.status = "scheduled";
+          }
+          autoAdvanceByeMatch(match);
+        });
+      }
+
+      for (var i = 1; i < roundNums.length; i += 1) {
+        var current = rounds[roundNums[i]];
+        var prior = rounds[roundNums[i - 1]];
+        current.forEach(function (match) {
+          var left = prior[(match.indexInRound - 1) * 2];
+          var right = prior[(match.indexInRound - 1) * 2 + 1];
+          var nextA = left ? left.winnerId : null;
+          var nextB = right ? right.winnerId : null;
+          if (match.teamAId !== nextA || match.teamBId !== nextB) {
+            match.teamAId = nextA; match.teamBId = nextB;
+            match.setScores = []; match.winnerId = null;
+            match.loserId = null; match.status = "scheduled";
+          }
+          autoAdvanceByeMatch(match);
+        });
+      }
+    });
+  }
+
+  // Remove all pools, crossover, and placement matches for the division.
+  function handleClearPoolsAndPlacement() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) { window.alert("Select a division."); return; }
+
+    var hasPools = getPools(divisionId).length > 0;
+    var hasCross = getCrossoverMatches(divisionId).length > 0;
+    if (!hasPools && !hasCross) {
+      window.alert("No pool or placement data exists for this division.");
+      return;
+    }
+
+    if (!window.confirm("Remove all pools, crossover matches, and placement brackets for this division?")) { return; }
+
+    state.pools = state.pools.filter(function (p) { return p.divisionId !== divisionId; });
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && (
+        m.stage === "crossover" || m.stage === "placement-champ" || m.stage === "placement-consol"
+      ));
+    });
+    saveState();
+    renderAll();
+  }
+
+  // Render pool standings cards into the pool assignment board element.
+  function renderPoolAssignmentBoard(divisionId) {
+    if (!ui.poolAssignmentBoard) { return; }
+    if (!divisionId) {
+      ui.poolAssignmentBoard.innerHTML = "";
+      return;
+    }
+
+    var pools = getPools(divisionId);
+    if (!pools.length) {
+      ui.poolAssignmentBoard.innerHTML = "<p class=\"text-muted\">No pools configured. Set the number of pools and click Auto-Split Teams.</p>";
+      return;
+    }
+
+    var completedPoolMatches = state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === "pool" && m.status === "completed";
+    });
+
+    var poolCards = pools.map(function (pool) {
+      var stats = computePoolStandingsForTeams(pool.teamIds, completedPoolMatches);
+      var rows = stats.map(function (stat, pos) {
+        var team = findTeam(stat.teamId);
+        return "<tr><td>" + (pos + 1) + "</td><td>" + escapeHtml(team ? team.name : "?") +
+          "</td><td>" + stat.wins + "-" + stat.losses + "</td></tr>";
+      }).join("");
+      if (!rows) {
+        rows = pool.teamIds.map(function (id) {
+          var t = findTeam(id);
+          return "<tr><td>—</td><td>" + escapeHtml(t ? t.name : "?") + "</td><td>0-0</td></tr>";
+        }).join("");
+      }
+      return "<div class=\"pool-card\">" +
+        "<h4>" + escapeHtml(pool.name) + "</h4>" +
+        "<table class=\"pool-table\"><thead><tr><th>#</th><th>Team</th><th>W-L</th></tr></thead>" +
+        "<tbody>" + rows + "</tbody></table></div>";
+    }).join("");
+
+    ui.poolAssignmentBoard.innerHTML = "<div class=\"pool-grid\">" + poolCards + "</div>";
+  }
+
+  // Build HTML for crossover and placement bracket sections (used in renderBrackets).
+  function buildCrossoverPlacementHtml(divisionId) {
+    var html = "";
+    var crossoverList = getCrossoverMatches(divisionId)
+      .sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+
+    if (crossoverList.length) {
+      var totalCO = crossoverList.length;
+      var coItems = crossoverList.map(function (match, idx) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        var winner = findTeam(match.winnerId);
+        return "<div class=\"bracket-match\">" +
+          "<strong>" + escapeHtml(teamA ? "#" + (idx + 1) + " " + teamA.name : "TBD") +
+          " vs " + escapeHtml(teamB ? "#" + (totalCO * 2 - idx) + " " + teamB.name : "TBD") + "</strong>" +
+          "<div class=\"bracket-meta\">" + escapeHtml(match.status) +
+          (winner ? " | " + escapeHtml(winner.name) + " → Champ; loser → Consol" : "") +
+          "</div></div>";
+      }).join("");
+      html += "<h3 class=\"crossover-heading\">Crossover Matches</h3>" +
+        "<div class=\"bracket-grid\"><section class=\"bracket-round\"><h3>Crossovers</h3>" +
+        coItems + "</section></div>";
+    }
+
+    html += renderSidePlacementHtml(divisionId, "placement-champ", "Championship");
+    html += renderSidePlacementHtml(divisionId, "placement-consol", "Consolation");
+    return html;
+  }
+
+  function renderSidePlacementHtml(divisionId, stage, label) {
+    var matches = state.matches.filter(function (m) {
+      return m.divisionId === divisionId && m.stage === stage;
+    });
+    if (!matches.length) { return ""; }
+
+    var rounds = groupBracketRounds(matches);
+    var keys = Object.keys(rounds).map(Number).sort(function (a, b) { return a - b; });
+    var total = keys.length;
+
+    var sections = keys.map(function (rn) {
+      var rMatches = rounds[rn].slice().sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+      var title = rn === total ? label + " Final" :
+        (rn === total - 1 && total > 2 ? label + " Semifinal" : label + " Round " + rn);
+      var items = rMatches.map(function (match) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        var winner = findTeam(match.winnerId);
+        return "<div class=\"bracket-match\">" +
+          "<strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " +
+          escapeHtml(teamB ? teamB.name : "TBD") + "</strong>" +
+          "<div class=\"bracket-meta\">" + escapeHtml(match.status) +
+          (winner ? " | Winner: " + escapeHtml(winner.name) : "") + "</div></div>";
+      }).join("");
+      return "<section class=\"bracket-round\"><h3>" + escapeHtml(title) + "</h3>" + items + "</section>";
+    }).join("");
+
+    var headingClass = stage === "placement-champ" ? "placement-champ-heading" : "placement-consol-heading";
+    return "<h3 class=\"" + headingClass + "\">" + label + " Bracket</h3>" +
+      "<div class=\"bracket-grid\">" + sections + "</div>";
+  }
+
   function handleAutoAssignSchedule() {
     var divisionId = ui.matchDivision.value;
     if (!divisionId) {
@@ -2108,7 +2544,7 @@
 
     match.setScores = sets;
     applyMatchOutcome(match);
-    if (match.stage === "bracket") {
+    if (match.stage === "bracket" || match.stage === "crossover") {
       recomputeBracketProgression(match.divisionId);
     }
     auditLog("Score saved: " + getMatchLabel(match) + " \u2192 " + match.status);
@@ -3442,9 +3878,13 @@
     }
 
     var division = findDivision(divisionId);
+    renderPoolAssignmentBoard(divisionId);
     var bracketMatches = getBracketMatches(divisionId);
     if (!bracketMatches.length) {
-      ui.bracketBoard.innerHTML = "<p>No bracket yet for " + escapeHtml(division ? division.name : "this division") + ". Generate a single-elimination bracket to begin.</p>";
+      var earlyCoHtml = buildCrossoverPlacementHtml(divisionId);
+      ui.bracketBoard.innerHTML = earlyCoHtml ||
+        "<p>No bracket yet for " + escapeHtml(division ? division.name : "this division") +
+        ". Generate a single-elimination bracket to begin.</p>";
       renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
       return;
     }
@@ -3631,7 +4071,8 @@
       lbHtml +
       gfHtml +
       consolHtml +
-      swissHtml;
+      swissHtml +
+      buildCrossoverPlacementHtml(divisionId);
     renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
   }
 
@@ -4239,12 +4680,21 @@
         setScores: Array.isArray(match.setScores) ? match.setScores : [],
         winnerId: match.winnerId || null,
         loserId: match.loserId || null,
+        poolId: match.poolId || null,
         workTeamId: match.workTeamId || null,
         locked: match.locked || false,
         forfeited: match.forfeited || false
       };
     }) : [];
     normalized.auditLog = Array.isArray(input.auditLog) ? input.auditLog : [];
+    normalized.pools = Array.isArray(input.pools) ? input.pools.map(function (pool) {
+      return {
+        id: pool.id || createId("pool"),
+        divisionId: pool.divisionId || null,
+        name: pool.name || "Pool",
+        teamIds: Array.isArray(pool.teamIds) ? pool.teamIds : []
+      };
+    }) : [];
 
     state = normalized;
     normalizeMatchAssignments();
@@ -4464,6 +4914,7 @@
   function recomputeBracketProgression(divisionId) {
     var bracketMatches = getBracketMatches(divisionId);
     if (!bracketMatches.length) {
+      recomputePlacementProgression(divisionId);
       return;
     }
 
@@ -4505,6 +4956,7 @@
     }
     recomputeConsolationProgression(divisionId);
     recomputeLosersProgression(divisionId);
+    recomputePlacementProgression(divisionId);
   }
 
   function autoAdvanceByeMatch(match) {

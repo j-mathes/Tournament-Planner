@@ -536,6 +536,72 @@ td {
   font-weight: 600;
 }
 
+/* ── Pool Play & Placement ─────────────────────────────── */
+.pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.pool-card {
+  background: #f9fdf9;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.pool-card h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.pool-table th,
+.pool-table td {
+  padding: 0.2rem 0.35rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.pool-table thead th {
+  background: #eef5ee;
+  font-weight: 600;
+}
+
+.crossover-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 1.2rem 0 0.4rem;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.2rem;
+}
+
+.placement-champ-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #2a7b2a;
+  margin: 1.2rem 0 0.4rem;
+  border-bottom: 2px solid #2a7b2a;
+  padding-bottom: 0.2rem;
+}
+
+.placement-consol-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #7a6030;
+  margin: 1.2rem 0 0.4rem;
+  border-bottom: 2px solid #c4a44a;
+  padding-bottom: 0.2rem;
+}
+
 .bracket-round {
   border: 1px solid var(--border);
   border-radius: 10px;
