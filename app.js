@@ -2498,7 +2498,7 @@
     match.setScores = [];
     forfeitMatchId = null;
 
-    if (match.stage === "bracket") {
+    if (match.stage !== "pool" && match.stage !== "swiss") {
       recomputeBracketProgression(match.divisionId);
     }
     var loserTeam = findTeam(match.loserId);
@@ -2544,7 +2544,7 @@
 
     match.setScores = sets;
     applyMatchOutcome(match);
-    if (match.stage === "bracket" || match.stage === "crossover") {
+    if (match.stage !== "pool" && match.stage !== "swiss") {
       recomputeBracketProgression(match.divisionId);
     }
     auditLog("Score saved: " + getMatchLabel(match) + " \u2192 " + match.status);
@@ -2683,7 +2683,7 @@
     match.winnerId = null;
     match.loserId = null;
     match.status = "scheduled";
-    if (match.stage === "bracket") {
+    if (match.stage !== "pool" && match.stage !== "swiss") {
       recomputeBracketProgression(match.divisionId);
     }
     saveState();
