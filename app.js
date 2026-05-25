@@ -90,6 +90,7 @@
     ui.generateBracket = document.getElementById("generate-bracket");
     ui.printBracket = document.getElementById("print-bracket");
     ui.exportBracket = document.getElementById("export-bracket");
+    ui.importBracketJson = document.getElementById("import-bracket-json");
     ui.printMetaBrackets = document.getElementById("print-meta-brackets");
     ui.bracketBoard = document.getElementById("bracket-board");
 
@@ -141,6 +142,7 @@
     ui.generateBracket.addEventListener("click", handleGenerateBracket);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
+    ui.importBracketJson.addEventListener("change", handleImportBracket);
 
     ui.teamScheduleTeam.addEventListener("change", renderTeamSchedule);
     ui.printTeamSchedule.addEventListener("click", handlePrintTeamSchedule);
@@ -632,6 +634,65 @@
 
     var fileNameBase = sanitizeFileName((division ? division.name : "division") + "-bracket");
     downloadJson(payload, fileNameBase + ".json");
+  }
+
+  function handleImportBracket(event) {
+    var file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function (loadEvent) {
+      try {
+        var incoming = JSON.parse(loadEvent.target.result);
+        if (!isValidBracketImport(incoming)) {
+          window.alert("Invalid bracket import file.");
+          return;
+        }
+
+        var selectedDivisionId = ui.bracketDivision.value || "";
+        var fileDivisionId = incoming.division && incoming.division.id ? incoming.division.id : "";
+        var targetDivisionId = selectedDivisionId || fileDivisionId;
+        if (!targetDivisionId) {
+          window.alert("Select a division before importing bracket data.");
+          return;
+        }
+
+        var targetDivision = findDivision(targetDivisionId);
+        if (!targetDivision) {
+          window.alert("Selected division was not found.");
+          return;
+        }
+
+        if (selectedDivisionId && fileDivisionId && selectedDivisionId !== fileDivisionId) {
+          var fileDivisionName = incoming.division.name || fileDivisionId;
+          if (!window.confirm("Imported bracket is for " + fileDivisionName + ". Apply it to currently selected division anyway?")) {
+            return;
+          }
+        }
+
+        var normalizedMatches = normalizeImportedBracketMatches(incoming.matches, targetDivisionId);
+        if (!normalizedMatches.length) {
+          window.alert("Imported bracket did not contain usable matches.");
+          return;
+        }
+
+        state.matches = state.matches.filter(function (match) {
+          return !(match.divisionId === targetDivisionId && match.stage === "bracket");
+        }).concat(normalizedMatches);
+
+        ui.bracketDivision.value = targetDivisionId;
+        recomputeBracketProgression(targetDivisionId);
+        saveState();
+        renderAll();
+      } catch (error) {
+        window.alert("Could not read bracket JSON file.");
+      }
+    };
+
+    reader.readAsText(file);
+    event.target.value = "";
   }
 
   function handleMatchTableSubmit(event) {
@@ -1548,6 +1609,91 @@
       Array.isArray(candidate.teams) &&
       Array.isArray(candidate.matches) &&
       Array.isArray(candidate.venues || []);
+  }
+
+  function isValidBracketImport(candidate) {
+    return candidate &&
+      Array.isArray(candidate.matches) &&
+      candidate.matches.some(function (match) {
+        return match && match.stage === "bracket";
+      });
+  }
+
+  function normalizeImportedBracketMatches(matches, divisionId) {
+    return matches
+      .filter(function (match) {
+        return match && match.stage === "bracket";
+      })
+      .map(function (match) {
+        var teamAId = findTeam(match.teamAId) ? match.teamAId : null;
+        var teamBId = findTeam(match.teamBId) ? match.teamBId : null;
+        var winnerId = findTeam(match.winnerId) ? match.winnerId : null;
+        var loserId = findTeam(match.loserId) ? match.loserId : null;
+
+        return {
+          id: createId("match"),
+          divisionId: divisionId,
+          stage: "bracket",
+          roundNumber: Math.max(1, parseInt(match.roundNumber, 10) || 1),
+          indexInRound: Math.max(1, parseInt(match.indexInRound, 10) || 1),
+          teamAId: teamAId,
+          teamBId: teamBId,
+          venueId: findVenue(match.venueId) ? match.venueId : null,
+          courtId: findCourt(match.venueId, match.courtId) ? match.courtId : null,
+          startTime: normalizeImportedDateTime(match.startTime),
+          durationMinutes: Number.isFinite(match.durationMinutes) ? match.durationMinutes : null,
+          status: normalizeImportedStatus(match.status),
+          setScores: normalizeImportedSetScores(match.setScores),
+          winnerId: winnerId,
+          loserId: loserId
+        };
+      });
+  }
+
+  function normalizeImportedDateTime(value) {
+    if (!value) {
+      return null;
+    }
+    var parsed = new Date(value);
+    if (isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed.toISOString();
+  }
+
+  function normalizeImportedStatus(value) {
+    if (value === "scheduled" || value === "in_progress" || value === "completed") {
+      return value;
+    }
+    return "scheduled";
+  }
+
+  function normalizeImportedSetScores(value) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map(function (set, index) {
+        if (!set) {
+          return null;
+        }
+
+        var teamAScore = parseInt(set.teamAScore, 10);
+        var teamBScore = parseInt(set.teamBScore, 10);
+        if (!Number.isFinite(teamAScore) || !Number.isFinite(teamBScore) || teamAScore < 0 || teamBScore < 0) {
+          return null;
+        }
+
+        return {
+          setNumber: index + 1,
+          teamAScore: teamAScore,
+          teamBScore: teamBScore
+        };
+      })
+      .filter(function (set) {
+        return Boolean(set);
+      });
   }
 
   function loadState() {

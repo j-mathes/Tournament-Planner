@@ -39,6 +39,7 @@ It is designed to:
   - Bracket board grouped by rounds
   - Bracket print workflow
   - Division-specific bracket JSON export
+  - Division-specific bracket JSON import
 - Standings
   - Ranking by wins
   - Tiebreakers by set ratio, then point ratio
