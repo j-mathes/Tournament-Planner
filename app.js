@@ -1876,6 +1876,20 @@
     saveState();
     renderAll();
 
+    // Pre-select the first division in key dropdowns so every view is
+    // immediately usable without the user having to pick a division manually.
+    var firstDivId = state.divisions.length ? state.divisions[0].id : "";
+    if (firstDivId) {
+      if (ui.matchDivision)    { ui.matchDivision.value    = firstDivId; renderMatches(); }
+      if (ui.bracketDivision)  { ui.bracketDivision.value  = firstDivId; renderBrackets(); }
+      if (ui.standingsDivision){ ui.standingsDivision.value = firstDivId; renderStandings(); renderFinalResults(); }
+    }
+    var firstVenueId = state.venues.length ? state.venues[0].id : "";
+    if (firstVenueId && ui.publicVenueFilter) {
+      ui.publicVenueFilter.value = firstVenueId;
+      renderPublicBoard();
+    }
+
     // Navigate to dashboard to see the overview
     var dashBtn = ui.nav.querySelector("[data-view='dashboard']");
     if (dashBtn) { dashBtn.click(); }
