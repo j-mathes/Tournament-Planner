@@ -103,6 +103,7 @@ It is designed to:
 - CSS
 - Vanilla JavaScript (ES6+, strict mode)
 - Browser localStorage persistence
+- Progressive Web App (PWA) — installable, offline-capable via Service Worker
 
 ## Getting Started
 

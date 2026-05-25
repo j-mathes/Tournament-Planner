@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tournament Planner</title>
+    <meta name="description" content="Browser-based volleyball tournament planner. Runs fully offline.">
+    <meta name="theme-color" content="#3f4f46">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -414,5 +418,10 @@
     </template>
 
     <script src="app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("./sw.js").catch(function () {});
+      }
+    </script>
   </body>
   </html>

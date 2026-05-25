@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#3f4f46"/>
+  <!-- Bracket lines -->
+  <g stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Left side teams -->
+    <rect x="40" y="100" width="120" height="44" rx="8" fill="#ffffff" opacity="0.9"/>
+    <rect x="40" y="190" width="120" height="44" rx="8" fill="#ffffff" opacity="0.9"/>
+    <rect x="40" y="280" width="120" height="44" rx="8" fill="#ffffff" opacity="0.9"/>
+    <rect x="40" y="370" width="120" height="44" rx="8" fill="#ffffff" opacity="0.9"/>
+    <!-- Left bracket connectors -->
+    <line x1="160" y1="122" x2="200" y2="122" stroke-width="6"/>
+    <line x1="160" y1="212" x2="200" y2="212" stroke-width="6"/>
+    <line x1="200" y1="122" x2="200" y2="167" stroke-width="6"/>
+    <line x1="200" y1="212" x2="200" y2="167" stroke-width="6"/>
+    <line x1="200" y1="167" x2="240" y2="167" stroke-width="6"/>
+    <line x1="160" y1="302" x2="200" y2="302" stroke-width="6"/>
+    <line x1="160" y1="392" x2="200" y2="392" stroke-width="6"/>
+    <line x1="200" y1="302" x2="200" y2="347" stroke-width="6"/>
+    <line x1="200" y1="392" x2="200" y2="347" stroke-width="6"/>
+    <line x1="200" y1="347" x2="240" y2="347" stroke-width="6"/>
+    <!-- Semi-final matches -->
+    <rect x="240" y="145" width="120" height="44" rx="8" fill="#a8c5b0" opacity="0.9"/>
+    <rect x="240" y="325" width="120" height="44" rx="8" fill="#a8c5b0" opacity="0.9"/>
+    <!-- Semi connectors -->
+    <line x1="360" y1="167" x2="390" y2="167" stroke-width="6"/>
+    <line x1="360" y1="347" x2="390" y2="347" stroke-width="6"/>
+    <line x1="390" y1="167" x2="390" y2="257" stroke-width="6"/>
+    <line x1="390" y1="347" x2="390" y2="257" stroke-width="6"/>
+    <line x1="390" y1="257" x2="420" y2="257" stroke-width="6"/>
+    <!-- Final match -->
+    <rect x="420" y="235" width="54" height="44" rx="8" fill="#f0c040"/>
+  </g>
+</svg>

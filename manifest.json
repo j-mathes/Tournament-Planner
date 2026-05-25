@@ -1,0 +1,17 @@
+{
+  "name": "Tournament Planner",
+  "short_name": "TPlanner",
+  "description": "Browser-based volleyball tournament planner — runs fully offline.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3f4f46",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
