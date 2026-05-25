@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tournament Planner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>Tournament Planner</h1>
+        <p>Static browser app</p>
+      </div>
+      <nav aria-label="Primary" class="nav" id="main-nav">
+        <button class="nav-btn is-active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="divisions">Divisions</button>
+        <button class="nav-btn" data-view="teams">Teams</button>
+        <button class="nav-btn" data-view="matches">Matches</button>
+        <button class="nav-btn" data-view="standings">Standings</button>
+        <button class="nav-btn" data-view="public">Public Display</button>
+      </nav>
+    </header>
+
+    <main class="layout">
+      <section class="view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
+        <h2 id="dashboard-title">Tournament Setup</h2>
+        <form id="tournament-form" class="card form-grid">
+          <label>
+            Tournament Name
+            <input type="text" id="tournament-name" required maxlength="120">
+          </label>
+          <label>
+            Start Date
+            <input type="date" id="tournament-start">
+          </label>
+          <label>
+            End Date
+            <input type="date" id="tournament-end">
+          </label>
+          <div class="form-actions">
+            <button type="submit">Save Tournament</button>
+            <button type="button" id="reset-data" class="danger">Reset All Data</button>
+          </div>
+        </form>
+
+        <section class="card split-actions" aria-label="Data IO">
+          <div>
+            <h3>Data</h3>
+            <p>Export and import full tournament data as JSON.</p>
+          </div>
+          <div class="io-actions">
+            <button id="export-json" type="button">Export JSON</button>
+            <label class="file-label" for="import-json">Import JSON</label>
+            <input id="import-json" type="file" accept="application/json">
+          </div>
+        </section>
+
+        <section class="card stats" id="dashboard-stats" aria-live="polite"></section>
+      </section>
+
+      <section class="view" id="view-divisions" aria-labelledby="divisions-title">
+        <h2 id="divisions-title">Divisions</h2>
+        <form id="division-form" class="card form-inline">
+          <label class="grow">
+            Division Name
+            <input type="text" id="division-name" required maxlength="80" placeholder="Example: 16U Girls">
+          </label>
+          <button type="submit">Add Division</button>
+        </form>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Teams</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="division-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-teams" aria-labelledby="teams-title">
+        <h2 id="teams-title">Teams</h2>
+        <form id="team-form" class="card form-grid">
+          <label>
+            Team Name
+            <input type="text" id="team-name" required maxlength="120">
+          </label>
+          <label>
+            Club
+            <input type="text" id="team-club" maxlength="120">
+          </label>
+          <label>
+            Coach
+            <input type="text" id="team-coach" maxlength="120">
+          </label>
+          <label>
+            Division
+            <select id="team-division" required></select>
+          </label>
+          <label>
+            Seed
+            <input type="number" id="team-seed" min="1" step="1" placeholder="Optional">
+          </label>
+          <div class="form-actions">
+            <button type="submit">Add Team</button>
+          </div>
+        </form>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Division</th>
+                <th>Seed</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="team-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-matches" aria-labelledby="matches-title">
+        <h2 id="matches-title">Matches</h2>
+        <section class="card split-actions">
+          <label>
+            Division
+            <select id="match-division"></select>
+          </label>
+          <button id="generate-round-robin" type="button">Generate Round Robin</button>
+        </section>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Match</th>
+                <th>Status</th>
+                <th>Sets</th>
+                <th>Winner</th>
+                <th>Update</th>
+              </tr>
+            </thead>
+            <tbody id="match-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-standings" aria-labelledby="standings-title">
+        <h2 id="standings-title">Standings</h2>
+        <section class="card split-actions">
+          <label>
+            Division
+            <select id="standings-division"></select>
+          </label>
+        </section>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Team</th>
+                <th>W</th>
+                <th>L</th>
+                <th>Set Ratio</th>
+                <th>Point Ratio</th>
+              </tr>
+            </thead>
+            <tbody id="standings-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-public" aria-labelledby="public-title">
+        <h2 id="public-title">Public Display</h2>
+        <div class="card" id="public-board"></div>
+      </section>
+    </main>
+
+    <template id="score-template">
+      <form class="score-form">
+        <label>Set 1 <input type="text" name="s1" placeholder="25-20"></label>
+        <label>Set 2 <input type="text" name="s2" placeholder="25-22"></label>
+        <label>Set 3 <input type="text" name="s3" placeholder="15-10"></label>
+        <button type="submit">Save</button>
+      </form>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+  </html>

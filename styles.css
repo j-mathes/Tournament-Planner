@@ -1,0 +1,298 @@
+:root {
+  --bg: #f4f7f4;
+  --panel: #ffffff;
+  --ink: #1d2b23;
+  --muted: #5f6f65;
+  --brand: #1f7a53;
+  --brand-strong: #11533a;
+  --border: #d8e1da;
+  --danger: #bb2f2f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 10%, #dbece0 0, transparent 35%),
+    radial-gradient(circle at 80% 0%, #ecf5ef 0, transparent 30%),
+    var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.6rem;
+}
+
+p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.brand h1 {
+  font-size: 1.25rem;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.nav-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0.42rem 0.85rem;
+  cursor: pointer;
+}
+
+.nav-btn.is-active,
+.nav-btn:hover {
+  border-color: var(--brand);
+  color: #fff;
+  background: var(--brand);
+}
+
+.layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.view {
+  display: none;
+  animation: fade 180ms ease-out;
+}
+
+.view.is-active {
+  display: block;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 6px rgba(17, 32, 21, 0.05);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.form-inline {
+  display: flex;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.grow {
+  flex: 1;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--brand);
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--brand-strong);
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.split-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: end;
+}
+
+.io-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.file-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  color: #fff;
+  background: #3f4f46;
+  cursor: pointer;
+}
+
+#import-json {
+  display: none;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0.3rem;
+  vertical-align: top;
+}
+
+.tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: #eef4ef;
+  color: #2f4f3d;
+}
+
+.tag.complete {
+  background: #dff0e7;
+  color: #0f5738;
+}
+
+.score-form {
+  display: flex;
+  gap: 0.4rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.score-form label {
+  font-size: 0.84rem;
+}
+
+.score-form input {
+  width: 86px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.8rem;
+}
+
+.stat {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: #fbfdfb;
+}
+
+.stat strong {
+  display: block;
+  font-size: 1.4rem;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .split-actions,
+  .form-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  table,
+  thead,
+  tbody,
+  tr,
+  th,
+  td {
+    display: block;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tr {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+
+  td {
+    border: 0;
+    padding: 0.2rem 0;
+  }
+}

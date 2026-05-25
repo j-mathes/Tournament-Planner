@@ -1,0 +1,768 @@
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "tp.static.v1";
+
+  var state = {
+    tournament: {
+      id: "tournament-1",
+      name: "",
+      startDate: "",
+      endDate: ""
+    },
+    divisions: [],
+    teams: [],
+    matches: []
+  };
+
+  var ui = {};
+
+  document.addEventListener("DOMContentLoaded", init);
+
+  function init() {
+    cacheDom();
+    bindEvents();
+    loadState();
+    renderAll();
+  }
+
+  function cacheDom() {
+    ui.nav = document.getElementById("main-nav");
+    ui.views = Array.prototype.slice.call(document.querySelectorAll(".view"));
+
+    ui.tournamentForm = document.getElementById("tournament-form");
+    ui.tournamentName = document.getElementById("tournament-name");
+    ui.tournamentStart = document.getElementById("tournament-start");
+    ui.tournamentEnd = document.getElementById("tournament-end");
+    ui.resetData = document.getElementById("reset-data");
+    ui.dashboardStats = document.getElementById("dashboard-stats");
+    ui.exportJson = document.getElementById("export-json");
+    ui.importJson = document.getElementById("import-json");
+
+    ui.divisionForm = document.getElementById("division-form");
+    ui.divisionName = document.getElementById("division-name");
+    ui.divisionTableBody = document.getElementById("division-table-body");
+
+    ui.teamForm = document.getElementById("team-form");
+    ui.teamName = document.getElementById("team-name");
+    ui.teamClub = document.getElementById("team-club");
+    ui.teamCoach = document.getElementById("team-coach");
+    ui.teamDivision = document.getElementById("team-division");
+    ui.teamSeed = document.getElementById("team-seed");
+    ui.teamTableBody = document.getElementById("team-table-body");
+
+    ui.matchDivision = document.getElementById("match-division");
+    ui.generateRoundRobin = document.getElementById("generate-round-robin");
+    ui.matchTableBody = document.getElementById("match-table-body");
+
+    ui.standingsDivision = document.getElementById("standings-division");
+    ui.standingsTableBody = document.getElementById("standings-table-body");
+
+    ui.publicBoard = document.getElementById("public-board");
+  }
+
+  function bindEvents() {
+    ui.nav.addEventListener("click", handleNavClick);
+    ui.tournamentForm.addEventListener("submit", handleTournamentSave);
+    ui.resetData.addEventListener("click", handleResetData);
+    ui.exportJson.addEventListener("click", exportJson);
+    ui.importJson.addEventListener("change", importJson);
+
+    ui.divisionForm.addEventListener("submit", handleDivisionAdd);
+    ui.divisionTableBody.addEventListener("click", handleDivisionActions);
+
+    ui.teamForm.addEventListener("submit", handleTeamAdd);
+    ui.teamTableBody.addEventListener("click", handleTeamActions);
+
+    ui.matchDivision.addEventListener("change", function () {
+      renderMatches();
+    });
+    ui.generateRoundRobin.addEventListener("click", handleGenerateRoundRobin);
+    ui.matchTableBody.addEventListener("submit", handleScoreSubmit);
+    ui.matchTableBody.addEventListener("click", handleMatchActions);
+
+    ui.standingsDivision.addEventListener("change", renderStandings);
+  }
+
+  function handleNavClick(event) {
+    var button = event.target.closest("button[data-view]");
+    if (!button) {
+      return;
+    }
+
+    var viewName = button.getAttribute("data-view");
+    Array.prototype.forEach.call(ui.nav.querySelectorAll(".nav-btn"), function (item) {
+      item.classList.toggle("is-active", item === button);
+    });
+
+    ui.views.forEach(function (view) {
+      var isActive = view.id === "view-" + viewName;
+      view.classList.toggle("is-active", isActive);
+    });
+  }
+
+  function handleTournamentSave(event) {
+    event.preventDefault();
+    state.tournament.name = ui.tournamentName.value.trim();
+    state.tournament.startDate = ui.tournamentStart.value;
+    state.tournament.endDate = ui.tournamentEnd.value;
+    saveState();
+    renderDashboardStats();
+  }
+
+  function handleResetData() {
+    var ok = window.confirm("Reset all tournament data? This cannot be undone.");
+    if (!ok) {
+      return;
+    }
+
+    state = {
+      tournament: {
+        id: "tournament-1",
+        name: "",
+        startDate: "",
+        endDate: ""
+      },
+      divisions: [],
+      teams: [],
+      matches: []
+    };
+    saveState();
+    renderAll();
+  }
+
+  function handleDivisionAdd(event) {
+    event.preventDefault();
+    var name = ui.divisionName.value.trim();
+    if (!name) {
+      return;
+    }
+
+    state.divisions.push({
+      id: createId("div"),
+      name: name
+    });
+
+    ui.divisionName.value = "";
+    saveState();
+    renderAll();
+  }
+
+  function handleDivisionActions(event) {
+    var button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+
+    var divisionId = button.getAttribute("data-division-id");
+    var action = button.getAttribute("data-action");
+
+    if (action === "delete") {
+      var inUse = state.teams.some(function (team) {
+        return team.divisionId === divisionId;
+      });
+      if (inUse) {
+        window.alert("Remove or move teams before deleting this division.");
+        return;
+      }
+
+      state.divisions = state.divisions.filter(function (division) {
+        return division.id !== divisionId;
+      });
+
+      state.matches = state.matches.filter(function (match) {
+        return match.divisionId !== divisionId;
+      });
+      saveState();
+      renderAll();
+    }
+  }
+
+  function handleTeamAdd(event) {
+    event.preventDefault();
+    if (!state.divisions.length) {
+      window.alert("Add at least one division first.");
+      return;
+    }
+
+    var name = ui.teamName.value.trim();
+    if (!name) {
+      return;
+    }
+
+    var seed = parseInt(ui.teamSeed.value, 10);
+    state.teams.push({
+      id: createId("team"),
+      name: name,
+      club: ui.teamClub.value.trim(),
+      coachName: ui.teamCoach.value.trim(),
+      divisionId: ui.teamDivision.value,
+      seed: Number.isFinite(seed) ? seed : null
+    });
+
+    ui.teamForm.reset();
+    saveState();
+    renderAll();
+  }
+
+  function handleTeamActions(event) {
+    var button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+
+    var teamId = button.getAttribute("data-team-id");
+    var action = button.getAttribute("data-action");
+
+    if (action === "delete") {
+      state.teams = state.teams.filter(function (team) {
+        return team.id !== teamId;
+      });
+
+      state.matches = state.matches.filter(function (match) {
+        return match.teamAId !== teamId && match.teamBId !== teamId;
+      });
+
+      saveState();
+      renderAll();
+    }
+  }
+
+  function handleGenerateRoundRobin() {
+    var divisionId = ui.matchDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var teams = getDivisionTeams(divisionId);
+    if (teams.length < 2) {
+      window.alert("Need at least two teams in this division.");
+      return;
+    }
+
+    state.matches = state.matches.filter(function (match) {
+      return !(match.divisionId === divisionId && match.stage === "pool");
+    });
+
+    var pairs = [];
+    for (var i = 0; i < teams.length; i += 1) {
+      for (var j = i + 1; j < teams.length; j += 1) {
+        pairs.push([teams[i], teams[j]]);
+      }
+    }
+
+    pairs.forEach(function (pair, index) {
+      state.matches.push({
+        id: createId("match"),
+        divisionId: divisionId,
+        stage: "pool",
+        roundNumber: index + 1,
+        teamAId: pair[0].id,
+        teamBId: pair[1].id,
+        status: "scheduled",
+        setScores: [],
+        winnerId: null,
+        loserId: null
+      });
+    });
+
+    saveState();
+    renderAll();
+  }
+
+  function handleScoreSubmit(event) {
+    var form = event.target.closest("form.score-form");
+    if (!form) {
+      return;
+    }
+
+    event.preventDefault();
+    var matchId = form.getAttribute("data-match-id");
+    var match = state.matches.find(function (item) {
+      return item.id === matchId;
+    });
+    if (!match) {
+      return;
+    }
+
+    var setNames = ["s1", "s2", "s3"];
+    var sets = [];
+    setNames.forEach(function (name, index) {
+      var raw = form.elements[name].value.trim();
+      if (!raw) {
+        return;
+      }
+
+      var parsed = parseSet(raw);
+      if (!parsed) {
+        return;
+      }
+
+      sets.push({
+        setNumber: index + 1,
+        teamAScore: parsed[0],
+        teamBScore: parsed[1]
+      });
+    });
+
+    if (!sets.length) {
+      window.alert("Enter at least one valid set score like 25-21.");
+      return;
+    }
+
+    match.setScores = sets;
+    applyMatchOutcome(match);
+    saveState();
+    renderAll();
+  }
+
+  function handleMatchActions(event) {
+    var button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+
+    var action = button.getAttribute("data-action");
+    var matchId = button.getAttribute("data-match-id");
+    if (action !== "clear-score") {
+      return;
+    }
+
+    var match = state.matches.find(function (item) {
+      return item.id === matchId;
+    });
+    if (!match) {
+      return;
+    }
+
+    match.setScores = [];
+    match.winnerId = null;
+    match.loserId = null;
+    match.status = "scheduled";
+    saveState();
+    renderAll();
+  }
+
+  function applyMatchOutcome(match) {
+    var aSets = 0;
+    var bSets = 0;
+
+    match.setScores.forEach(function (set) {
+      if (set.teamAScore > set.teamBScore) {
+        aSets += 1;
+      } else if (set.teamBScore > set.teamAScore) {
+        bSets += 1;
+      }
+    });
+
+    if (aSets === bSets) {
+      match.status = "in_progress";
+      match.winnerId = null;
+      match.loserId = null;
+      return;
+    }
+
+    match.status = "completed";
+    if (aSets > bSets) {
+      match.winnerId = match.teamAId;
+      match.loserId = match.teamBId;
+    } else {
+      match.winnerId = match.teamBId;
+      match.loserId = match.teamAId;
+    }
+  }
+
+  function parseSet(text) {
+    var parts = text.split("-");
+    if (parts.length !== 2) {
+      return null;
+    }
+
+    var left = parseInt(parts[0], 10);
+    var right = parseInt(parts[1], 10);
+    if (!Number.isFinite(left) || !Number.isFinite(right) || left < 0 || right < 0) {
+      return null;
+    }
+
+    return [left, right];
+  }
+
+  function renderAll() {
+    renderTournamentForm();
+    renderDivisionOptions();
+    renderDashboardStats();
+    renderDivisions();
+    renderTeams();
+    renderMatches();
+    renderStandings();
+    renderPublicBoard();
+  }
+
+  function renderTournamentForm() {
+    ui.tournamentName.value = state.tournament.name || "";
+    ui.tournamentStart.value = state.tournament.startDate || "";
+    ui.tournamentEnd.value = state.tournament.endDate || "";
+  }
+
+  function renderDivisionOptions() {
+    var optionsHtml = state.divisions
+      .map(function (division) {
+        return "<option value=\"" + escapeHtml(division.id) + "\">" + escapeHtml(division.name) + "</option>";
+      })
+      .join("");
+
+    ui.teamDivision.innerHTML = optionsHtml;
+    ui.matchDivision.innerHTML = "<option value=\"\">Select division</option>" + optionsHtml;
+    ui.standingsDivision.innerHTML = "<option value=\"\">Select division</option>" + optionsHtml;
+  }
+
+  function renderDashboardStats() {
+    var completed = state.matches.filter(function (match) {
+      return match.status === "completed";
+    }).length;
+
+    var html = [
+      statCard("Divisions", state.divisions.length),
+      statCard("Teams", state.teams.length),
+      statCard("Matches", state.matches.length),
+      statCard("Completed", completed)
+    ].join("");
+
+    ui.dashboardStats.innerHTML = html;
+  }
+
+  function renderDivisions() {
+    ui.divisionTableBody.innerHTML = state.divisions
+      .map(function (division) {
+        var count = getDivisionTeams(division.id).length;
+        return "<tr>" +
+          "<td>" + escapeHtml(division.name) + "</td>" +
+          "<td>" + count + "</td>" +
+          "<td><button type=\"button\" data-action=\"delete\" data-division-id=\"" + escapeHtml(division.id) + "\">Delete</button></td>" +
+          "</tr>";
+      })
+      .join("");
+  }
+
+  function renderTeams() {
+    ui.teamTableBody.innerHTML = state.teams
+      .slice()
+      .sort(compareTeams)
+      .map(function (team) {
+        var division = findDivision(team.divisionId);
+        return "<tr>" +
+          "<td><strong>" + escapeHtml(team.name) + "</strong><br><small>" + escapeHtml(team.club || "-") + "</small></td>" +
+          "<td>" + escapeHtml(division ? division.name : "-") + "</td>" +
+          "<td>" + (team.seed || "-") + "</td>" +
+          "<td><button type=\"button\" data-action=\"delete\" data-team-id=\"" + escapeHtml(team.id) + "\">Delete</button></td>" +
+          "</tr>";
+      })
+      .join("");
+  }
+
+  function renderMatches() {
+    var divisionId = ui.matchDivision.value || "";
+    var matches = state.matches
+      .filter(function (match) {
+        return !divisionId || match.divisionId === divisionId;
+      })
+      .sort(function (a, b) {
+        return a.roundNumber - b.roundNumber;
+      });
+
+    ui.matchTableBody.innerHTML = matches
+      .map(function (match) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        var winner = findTeam(match.winnerId);
+
+        return "<tr>" +
+          "<td><strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong><br><small>Round " + match.roundNumber + "</small></td>" +
+          "<td>" + renderStatusTag(match.status) + "</td>" +
+          "<td>" + renderSetSummary(match) + "</td>" +
+          "<td>" + escapeHtml(winner ? winner.name : "-") + "</td>" +
+          "<td>" + renderScoreForm(match) + "</td>" +
+          "</tr>";
+      })
+      .join("");
+  }
+
+  function renderStandings() {
+    var divisionId = ui.standingsDivision.value || "";
+    if (!divisionId) {
+      ui.standingsTableBody.innerHTML = "";
+      return;
+    }
+
+    var rows = computeStandings(divisionId);
+    ui.standingsTableBody.innerHTML = rows
+      .map(function (row, index) {
+        return "<tr>" +
+          "<td>" + (index + 1) + "</td>" +
+          "<td>" + escapeHtml(row.team.name) + "</td>" +
+          "<td>" + row.wins + "</td>" +
+          "<td>" + row.losses + "</td>" +
+          "<td>" + formatRatio(row.setsWon, row.setsLost) + "</td>" +
+          "<td>" + formatRatio(row.pointsFor, row.pointsAgainst) + "</td>" +
+          "</tr>";
+      })
+      .join("");
+  }
+
+  function renderPublicBoard() {
+    var live = state.matches.filter(function (match) {
+      return match.status !== "completed";
+    });
+    var next = live.slice(0, 8);
+
+    if (!next.length) {
+      ui.publicBoard.innerHTML = "<p>No upcoming or active matches yet.</p>";
+      return;
+    }
+
+    ui.publicBoard.innerHTML = "<h3>Upcoming / Active Matches</h3>" + next
+      .map(function (match) {
+        var teamA = findTeam(match.teamAId);
+        var teamB = findTeam(match.teamBId);
+        var division = findDivision(match.divisionId);
+        return "<p><strong>" + escapeHtml(teamA ? teamA.name : "TBD") +
+          " vs " + escapeHtml(teamB ? teamB.name : "TBD") +
+          "</strong> <span class=\"tag\">" + escapeHtml(match.status) +
+          "</span><br><small>" + escapeHtml(division ? division.name : "") + "</small></p>";
+      })
+      .join("<hr>");
+  }
+
+  function computeStandings(divisionId) {
+    var teams = getDivisionTeams(divisionId);
+    var completed = state.matches.filter(function (match) {
+      return match.divisionId === divisionId && match.status === "completed";
+    });
+
+    var stats = teams.map(function (team) {
+      return {
+        team: team,
+        wins: 0,
+        losses: 0,
+        setsWon: 0,
+        setsLost: 0,
+        pointsFor: 0,
+        pointsAgainst: 0
+      };
+    });
+
+    completed.forEach(function (match) {
+      var a = findStat(stats, match.teamAId);
+      var b = findStat(stats, match.teamBId);
+      if (!a || !b) {
+        return;
+      }
+
+      match.setScores.forEach(function (set) {
+        a.pointsFor += set.teamAScore;
+        a.pointsAgainst += set.teamBScore;
+        b.pointsFor += set.teamBScore;
+        b.pointsAgainst += set.teamAScore;
+
+        if (set.teamAScore > set.teamBScore) {
+          a.setsWon += 1;
+          b.setsLost += 1;
+        } else if (set.teamBScore > set.teamAScore) {
+          b.setsWon += 1;
+          a.setsLost += 1;
+        }
+      });
+
+      if (match.winnerId === match.teamAId) {
+        a.wins += 1;
+        b.losses += 1;
+      } else if (match.winnerId === match.teamBId) {
+        b.wins += 1;
+        a.losses += 1;
+      }
+    });
+
+    stats.sort(function (left, right) {
+      if (right.wins !== left.wins) {
+        return right.wins - left.wins;
+      }
+
+      var leftSetRatio = calcRatio(left.setsWon, left.setsLost);
+      var rightSetRatio = calcRatio(right.setsWon, right.setsLost);
+      if (rightSetRatio !== leftSetRatio) {
+        return rightSetRatio - leftSetRatio;
+      }
+
+      var leftPointRatio = calcRatio(left.pointsFor, left.pointsAgainst);
+      var rightPointRatio = calcRatio(right.pointsFor, right.pointsAgainst);
+      if (rightPointRatio !== leftPointRatio) {
+        return rightPointRatio - leftPointRatio;
+      }
+
+      return compareTeams(left.team, right.team);
+    });
+
+    return stats;
+  }
+
+  function exportJson() {
+    var payload = JSON.stringify(state, null, 2);
+    var blob = new Blob([payload], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = "tournament-planner-data.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJson(event) {
+    var file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function (loadEvent) {
+      try {
+        var incoming = JSON.parse(loadEvent.target.result);
+        if (!isValidState(incoming)) {
+          window.alert("Invalid import file format.");
+          return;
+        }
+
+        state = incoming;
+        saveState();
+        renderAll();
+      } catch (error) {
+        window.alert("Could not read JSON file.");
+      }
+    };
+    reader.readAsText(file);
+
+    event.target.value = "";
+  }
+
+  function isValidState(candidate) {
+    return candidate &&
+      candidate.tournament &&
+      Array.isArray(candidate.divisions) &&
+      Array.isArray(candidate.teams) &&
+      Array.isArray(candidate.matches);
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      var parsed = JSON.parse(raw);
+      if (isValidState(parsed)) {
+        state = parsed;
+      }
+    } catch (error) {
+      console.warn("Failed to load saved data.", error);
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function getDivisionTeams(divisionId) {
+    return state.teams
+      .filter(function (team) {
+        return team.divisionId === divisionId;
+      })
+      .sort(compareTeams);
+  }
+
+  function compareTeams(left, right) {
+    var lSeed = Number.isFinite(left.seed) ? left.seed : Number.MAX_SAFE_INTEGER;
+    var rSeed = Number.isFinite(right.seed) ? right.seed : Number.MAX_SAFE_INTEGER;
+    if (lSeed !== rSeed) {
+      return lSeed - rSeed;
+    }
+    return left.name.localeCompare(right.name);
+  }
+
+  function findDivision(id) {
+    return state.divisions.find(function (division) {
+      return division.id === id;
+    });
+  }
+
+  function findTeam(id) {
+    return state.teams.find(function (team) {
+      return team.id === id;
+    });
+  }
+
+  function findStat(rows, teamId) {
+    return rows.find(function (row) {
+      return row.team.id === teamId;
+    });
+  }
+
+  function statCard(label, value) {
+    return "<div class=\"stat\"><span>" + escapeHtml(label) + "</span><strong>" + value + "</strong></div>";
+  }
+
+  function renderStatusTag(status) {
+    var css = status === "completed" ? "tag complete" : "tag";
+    return "<span class=\"" + css + "\">" + escapeHtml(status) + "</span>";
+  }
+
+  function renderSetSummary(match) {
+    if (!match.setScores.length) {
+      return "-";
+    }
+    return match.setScores
+      .map(function (set) {
+        return set.teamAScore + "-" + set.teamBScore;
+      })
+      .join(", ");
+  }
+
+  function renderScoreForm(match) {
+    var values = { s1: "", s2: "", s3: "" };
+    match.setScores.forEach(function (set, index) {
+      var key = "s" + (index + 1);
+      values[key] = set.teamAScore + "-" + set.teamBScore;
+    });
+
+    return "<form class=\"score-form\" data-match-id=\"" + escapeHtml(match.id) + "\">" +
+      "<label>Set 1<input name=\"s1\" value=\"" + escapeHtml(values.s1) + "\" placeholder=\"25-20\"></label>" +
+      "<label>Set 2<input name=\"s2\" value=\"" + escapeHtml(values.s2) + "\" placeholder=\"25-22\"></label>" +
+      "<label>Set 3<input name=\"s3\" value=\"" + escapeHtml(values.s3) + "\" placeholder=\"15-10\"></label>" +
+      "<button type=\"submit\">Save</button>" +
+      "<button type=\"button\" data-action=\"clear-score\" data-match-id=\"" + escapeHtml(match.id) + "\">Clear</button>" +
+      "</form>";
+  }
+
+  function formatRatio(numerator, denominator) {
+    return calcRatio(numerator, denominator).toFixed(2);
+  }
+
+  function calcRatio(numerator, denominator) {
+    if (!denominator) {
+      return numerator ? numerator : 0;
+    }
+    return numerator / denominator;
+  }
+
+  function createId(prefix) {
+    return prefix + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+})();
