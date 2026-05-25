@@ -301,6 +301,31 @@
             <input id="import-bracket-json" type="file" accept="application/json">
           </div>
         </section>
+        <section class="card form-grid no-print" aria-label="Bracket Schedule Controls">
+          <label>
+            Venue
+            <select id="bracket-schedule-venue"></select>
+          </label>
+          <label>
+            Start Time
+            <input type="datetime-local" id="bracket-schedule-start-time">
+          </label>
+          <label>
+            Match Minutes
+            <input type="number" id="bracket-schedule-slot-minutes" min="10" step="1" value="45">
+          </label>
+          <label>
+            Break Minutes
+            <input type="number" id="bracket-schedule-break-minutes" min="0" step="1" value="10">
+          </label>
+          <label>
+            Semifinal/Final Gap Minutes
+            <input type="number" id="bracket-priority-gap-minutes" min="0" step="1" value="20">
+          </label>
+          <div class="form-actions">
+            <button id="auto-schedule-bracket" type="button" class="secondary">Auto-Schedule Bracket</button>
+          </div>
+        </section>
         <div class="card">
           <div class="print-meta" id="print-meta-brackets" aria-hidden="true"></div>
           <div id="bracket-board"></div>

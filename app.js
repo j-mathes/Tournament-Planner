@@ -89,6 +89,12 @@
     ui.bracketDivision = document.getElementById("bracket-division");
     ui.generateBracket = document.getElementById("generate-bracket");
     ui.generateBracketStandings = document.getElementById("generate-bracket-standings");
+    ui.bracketScheduleVenue = document.getElementById("bracket-schedule-venue");
+    ui.bracketScheduleStartTime = document.getElementById("bracket-schedule-start-time");
+    ui.bracketScheduleSlotMinutes = document.getElementById("bracket-schedule-slot-minutes");
+    ui.bracketScheduleBreakMinutes = document.getElementById("bracket-schedule-break-minutes");
+    ui.bracketPriorityGapMinutes = document.getElementById("bracket-priority-gap-minutes");
+    ui.autoScheduleBracket = document.getElementById("auto-schedule-bracket");
     ui.printBracket = document.getElementById("print-bracket");
     ui.exportBracket = document.getElementById("export-bracket");
     ui.importBracketJson = document.getElementById("import-bracket-json");
@@ -142,6 +148,7 @@
     ui.bracketDivision.addEventListener("change", renderBrackets);
     ui.generateBracket.addEventListener("click", handleGenerateBracket);
     ui.generateBracketStandings.addEventListener("click", handleGenerateBracketFromStandings);
+    ui.autoScheduleBracket.addEventListener("click", handleAutoScheduleBracket);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
     ui.importBracketJson.addEventListener("change", handleImportBracket);
@@ -615,6 +622,68 @@
     renderAll();
   }
 
+  function handleAutoScheduleBracket() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var venue = findVenue(ui.bracketScheduleVenue.value);
+    if (!venue || !venue.courts.length) {
+      window.alert("Select a venue with at least one court.");
+      return;
+    }
+
+    var rounds = groupBracketRounds(getBracketMatches(divisionId));
+    var roundNumbers = Object.keys(rounds).map(function (item) {
+      return parseInt(item, 10);
+    }).sort(function (a, b) {
+      return a - b;
+    });
+    if (!roundNumbers.length) {
+      window.alert("No bracket matches found for this division.");
+      return;
+    }
+
+    var baseDate = ui.bracketScheduleStartTime.value ? new Date(ui.bracketScheduleStartTime.value) : new Date();
+    if (isNaN(baseDate.getTime())) {
+      window.alert("Invalid start time.");
+      return;
+    }
+
+    var slotMinutes = Math.max(10, parseInt(ui.bracketScheduleSlotMinutes.value, 10) || DEFAULT_MATCH_MINUTES);
+    var breakMinutes = Math.max(0, parseInt(ui.bracketScheduleBreakMinutes.value, 10) || 10);
+    var priorityGapMinutes = Math.max(0, parseInt(ui.bracketPriorityGapMinutes.value, 10) || 20);
+    var waveStepMs = (slotMinutes + breakMinutes) * 60000;
+    var currentRoundStart = new Date(baseDate.getTime());
+
+    roundNumbers.forEach(function (roundNumber, index) {
+      var matches = rounds[roundNumber]
+        .slice()
+        .sort(function (a, b) {
+          return a.indexInRound - b.indexInRound;
+        });
+
+      matches.forEach(function (match, matchIndex) {
+        var court = venue.courts[matchIndex % venue.courts.length];
+        var wave = Math.floor(matchIndex / venue.courts.length);
+        var start = new Date(currentRoundStart.getTime() + wave * waveStepMs);
+        match.venueId = venue.id;
+        match.courtId = court.id;
+        match.startTime = start.toISOString();
+        match.durationMinutes = slotMinutes;
+      });
+
+      var wavesUsed = Math.max(1, Math.ceil(matches.length / venue.courts.length));
+      var extraPriorityGap = index >= roundNumbers.length - 2 ? priorityGapMinutes : 0;
+      currentRoundStart = new Date(currentRoundStart.getTime() + (wavesUsed * (slotMinutes + breakMinutes) + extraPriorityGap) * 60000);
+    });
+
+    saveState();
+    renderAll();
+  }
+
   function handlePrintMatches() {
     preparePrintMeta("matches");
     setPrintContext("matches");
@@ -965,6 +1034,7 @@
     var selectedStandingsDivision = ui.standingsDivision.value;
     var selectedTeamDivision = ui.teamDivision.value;
     var selectedScheduleVenue = ui.scheduleVenue.value;
+    var selectedBracketScheduleVenue = ui.bracketScheduleVenue.value;
     var selectedVenueFilter = ui.matchVenueFilter.value;
     var selectedScheduleTeam = ui.teamScheduleTeam.value;
     var selectedBracketDivision = ui.bracketDivision.value;
@@ -982,6 +1052,7 @@
       return optionHtml(venue.id, venue.name);
     }).join("");
     ui.scheduleVenue.innerHTML = "<option value=\"\">Select venue</option>" + venueOptions;
+    ui.bracketScheduleVenue.innerHTML = "<option value=\"\">Select venue</option>" + venueOptions;
     ui.matchVenueFilter.innerHTML = "<option value=\"\">All venues</option>" + venueOptions;
 
     var teamOptions = state.teams
@@ -999,6 +1070,7 @@
     restoreSelectValue(ui.matchDivision, selectedMatchDivision);
     restoreSelectValue(ui.standingsDivision, selectedStandingsDivision);
     restoreSelectValue(ui.scheduleVenue, selectedScheduleVenue);
+    restoreSelectValue(ui.bracketScheduleVenue, selectedBracketScheduleVenue);
     restoreSelectValue(ui.matchVenueFilter, selectedVenueFilter);
     restoreSelectValue(ui.teamScheduleTeam, selectedScheduleTeam);
     restoreSelectValue(ui.bracketDivision, selectedBracketDivision);

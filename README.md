@@ -35,6 +35,8 @@ It is designed to:
 - Brackets
   - Generate single-elimination bracket per division
   - Generate bracket seeded from current division standings
+  - Auto-schedule bracket rounds by venue/court/time
+  - Semifinal/final priority gap support in bracket auto-scheduling
   - Auto-advance bye matches
   - Automatic winner progression to later rounds
   - Bracket board grouped by rounds
