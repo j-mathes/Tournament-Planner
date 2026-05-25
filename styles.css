@@ -468,6 +468,14 @@ td {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.consolation-bracket-heading {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+  color: var(--accent);
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
 .bracket-round {
   border: 1px solid var(--border);
   border-radius: 10px;

@@ -155,6 +155,8 @@
     ui.bracketDivision = document.getElementById("bracket-division");
     ui.generateBracket = document.getElementById("generate-bracket");
     ui.generateBracketStandings = document.getElementById("generate-bracket-standings");
+    ui.generateConsolationBracket = document.getElementById("generate-consolation-bracket");
+    ui.clearConsolationBracket = document.getElementById("clear-consolation-bracket");
     ui.bracketScheduleVenue = document.getElementById("bracket-schedule-venue");
     ui.bracketScheduleStartTime = document.getElementById("bracket-schedule-start-time");
     ui.bracketScheduleSlotMinutes = document.getElementById("bracket-schedule-slot-minutes");
@@ -228,6 +230,8 @@
     ui.bracketDivision.addEventListener("change", renderBrackets);
     ui.generateBracket.addEventListener("click", handleGenerateBracket);
     ui.generateBracketStandings.addEventListener("click", handleGenerateBracketFromStandings);
+    ui.generateConsolationBracket.addEventListener("click", handleGenerateConsolationBracket);
+    ui.clearConsolationBracket.addEventListener("click", handleClearConsolationBracket);
     ui.autoScheduleBracket.addEventListener("click", handleAutoScheduleBracket);
     ui.printBracket.addEventListener("click", handlePrintBrackets);
     ui.exportBracket.addEventListener("click", handleExportBracket);
@@ -695,6 +699,195 @@
     }
 
     return all;
+  }
+
+  function getConsolationMatches(divisionId) {
+    return state.matches.filter(function (match) {
+      return match.divisionId === divisionId && match.stage === "consolation";
+    });
+  }
+
+  function createConsolationMatch(divisionId, roundNumber, indexInRound, teamAId, teamBId) {
+    return {
+      id: createId("match"),
+      divisionId: divisionId,
+      stage: "consolation",
+      roundNumber: roundNumber,
+      indexInRound: indexInRound,
+      teamAId: teamAId || null,
+      teamBId: teamBId || null,
+      venueId: null,
+      courtId: null,
+      startTime: null,
+      durationMinutes: null,
+      status: "scheduled",
+      setScores: [],
+      winnerId: null,
+      loserId: null,
+      workTeamId: null
+    };
+  }
+
+  function buildConsolationBracket(divisionId, mainR1Matches) {
+    // Only use matches where at least one team slot is filled (not pure phantom byes)
+    var real = mainR1Matches
+      .slice()
+      .sort(function (a, b) { return a.indexInRound - b.indexInRound; })
+      .filter(function (m) { return m.teamAId || m.teamBId; });
+
+    var count = real.length;
+    if (count < 2) { return []; }
+
+    // Consolation Round 1: pair up consecutive R1 losers
+    var r1 = [];
+    var i;
+    for (i = 0; i + 1 < count; i += 2) {
+      r1.push(createConsolationMatch(
+        divisionId, 1, Math.floor(i / 2) + 1,
+        real[i].loserId || null,
+        real[i + 1].loserId || null
+      ));
+    }
+    // Odd team gets a bye in consolation R1
+    if (count % 2 !== 0) {
+      r1.push(createConsolationMatch(
+        divisionId, 1, Math.ceil(count / 2),
+        real[count - 1].loserId || null, null
+      ));
+    }
+
+    var all = r1.slice();
+    var prior = r1;
+    var maxRounds = Math.ceil(Math.log2(Math.max(count, 2)));
+
+    for (var round = 2; round <= maxRounds; round += 1) {
+      var curr = [];
+      var slot;
+      for (slot = 0; slot + 1 < prior.length; slot += 2) {
+        curr.push(createConsolationMatch(divisionId, round, Math.floor(slot / 2) + 1, null, null));
+      }
+      if (prior.length % 2 !== 0) {
+        curr.push(createConsolationMatch(divisionId, round, Math.ceil(prior.length / 2), null, null));
+      }
+      all = all.concat(curr);
+      prior = curr;
+    }
+
+    return all;
+  }
+
+  function handleGenerateConsolationBracket() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var mainR1 = getBracketMatches(divisionId).filter(function (m) { return m.roundNumber === 1; });
+    if (!mainR1.length) {
+      window.alert("Generate the main bracket first.");
+      return;
+    }
+
+    var realR1 = mainR1.filter(function (m) { return m.teamAId || m.teamBId; });
+    if (realR1.length < 2) {
+      window.alert("Need at least 2 first-round matches with teams assigned to generate a consolation bracket.");
+      return;
+    }
+
+    // Remove any existing consolation bracket for this division
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && m.stage === "consolation");
+    });
+
+    var generated = buildConsolationBracket(divisionId, mainR1);
+    state.matches = state.matches.concat(generated);
+    recomputeBracketProgression(divisionId);
+    saveState();
+    renderAll();
+  }
+
+  function handleClearConsolationBracket() {
+    var divisionId = ui.bracketDivision.value;
+    if (!divisionId) {
+      window.alert("Select a division.");
+      return;
+    }
+
+    var has = getConsolationMatches(divisionId).length > 0;
+    if (!has) {
+      window.alert("No consolation bracket exists for this division.");
+      return;
+    }
+
+    if (!window.confirm("Remove the consolation bracket for this division? This cannot be undone.")) {
+      return;
+    }
+
+    state.matches = state.matches.filter(function (m) {
+      return !(m.divisionId === divisionId && m.stage === "consolation");
+    });
+    saveState();
+    renderAll();
+  }
+
+  function recomputeConsolationProgression(divisionId) {
+    var consolMatches = getConsolationMatches(divisionId);
+    if (!consolMatches.length) { return; }
+
+    // Get the real (non-pure-bye) Round 1 main bracket matches, sorted
+    var mainR1 = getBracketMatches(divisionId)
+      .filter(function (m) { return m.roundNumber === 1 && (m.teamAId || m.teamBId); })
+      .sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+
+    var rounds = groupBracketRounds(consolMatches);
+    var roundNumbers = Object.keys(rounds).map(function (n) {
+      return parseInt(n, 10);
+    }).sort(function (a, b) { return a - b; });
+
+    roundNumbers.forEach(function (rn) {
+      rounds[rn].sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+    });
+
+    // Populate consolation R1 teams from main bracket R1 losers
+    if (rounds[1]) {
+      rounds[1].forEach(function (match, idx) {
+        var srcA = mainR1[idx * 2] || null;
+        var srcB = mainR1[idx * 2 + 1] || null;
+        var teamA = srcA ? (srcA.loserId || null) : null;
+        var teamB = srcB ? (srcB.loserId || null) : null;
+        if (match.teamAId !== teamA || match.teamBId !== teamB) {
+          match.teamAId = teamA;
+          match.teamBId = teamB;
+          match.setScores = [];
+          match.winnerId = null;
+          match.loserId = null;
+          match.status = "scheduled";
+        }
+        autoAdvanceByeMatch(match);
+      });
+    }
+
+    // Standard winner-propagation for subsequent rounds
+    for (var i = 1; i < roundNumbers.length; i += 1) {
+      var current = rounds[roundNumbers[i]];
+      var prior = rounds[roundNumbers[i - 1]];
+      current.forEach(function (match) {
+        var left = prior[(match.indexInRound - 1) * 2];
+        var right = prior[(match.indexInRound - 1) * 2 + 1];
+        var nextA = left ? left.winnerId : null;
+        var nextB = right ? right.winnerId : null;
+        if (match.teamAId !== nextA || match.teamBId !== nextB) {
+          match.teamAId = nextA;
+          match.teamBId = nextB;
+          match.setScores = [];
+          match.winnerId = null;
+          match.loserId = null;
+          match.status = "scheduled";
+        }
+        autoAdvanceByeMatch(match);
+      });
+    }
   }
 
   function handleAutoAssignSchedule() {
@@ -2832,9 +3025,45 @@
       return "<section class=\"bracket-round\"><h3>" + escapeHtml(title) + "</h3>" + items + "</section>";
     }).join("");
 
+    var consolHtml = "";
+    var consolMatches = getConsolationMatches(divisionId);
+    if (consolMatches.length) {
+      var consolRounds = groupBracketRounds(consolMatches);
+      var consolKeys = Object.keys(consolRounds).map(function (k) {
+        return parseInt(k, 10);
+      }).sort(function (a, b) { return a - b; });
+      var totalConsolRounds = consolKeys.length;
+
+      var consolSections = consolKeys.map(function (rn) {
+        var cMatches = consolRounds[rn].slice().sort(function (a, b) { return a.indexInRound - b.indexInRound; });
+        var cTitle = rn === totalConsolRounds
+          ? "Consolation Final"
+          : (rn === totalConsolRounds - 1 && totalConsolRounds > 2
+            ? "Consolation Semifinal"
+            : "Consolation Round " + rn);
+        var cItems = cMatches.map(function (match) {
+          var teamA = findTeam(match.teamAId);
+          var teamB = findTeam(match.teamBId);
+          var winner = findTeam(match.winnerId);
+          return "<div class=\"bracket-match\">" +
+            "<strong>" + escapeHtml(teamA ? teamA.name : "TBD") + " vs " + escapeHtml(teamB ? teamB.name : "TBD") + "</strong>" +
+            "<div class=\"bracket-meta\">" +
+            escapeHtml(match.status) +
+            (winner ? (" | Winner: " + winner.name) : "") +
+            (match.startTime ? (" | " + formatDateTime(match.startTime)) : "") +
+            "</div></div>";
+        }).join("");
+        return "<section class=\"bracket-round\"><h3>" + escapeHtml(cTitle) + "</h3>" + cItems + "</section>";
+      }).join("");
+
+      consolHtml = "<h3 class=\"consolation-bracket-heading\">Consolation Bracket</h3>" +
+        "<div class=\"bracket-grid\">" + consolSections + "</div>";
+    }
+
     ui.bracketBoard.innerHTML = "<p><strong>" + escapeHtml(division ? division.name : "Bracket") + "</strong></p>" +
       renderBracketIntegrity(integrityIssues, divisionId) +
-      "<div class=\"bracket-grid\">" + roundHtml + "</div>";
+      "<div class=\"bracket-grid\">" + roundHtml + "</div>" +
+      consolHtml;
     renderPrintMeta(ui.printMetaBrackets, "Bracket", division ? ("Division: " + division.name) : "");
   }
 
@@ -3706,6 +3935,7 @@
         autoAdvanceByeMatch(match);
       });
     }
+    recomputeConsolationProgression(divisionId);
   }
 
   function autoAdvanceByeMatch(match) {
