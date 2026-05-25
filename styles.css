@@ -82,7 +82,8 @@ p {
 body.admin-locked [data-view="divisions"],
 body.admin-locked [data-view="teams"],
 body.admin-locked [data-view="venues"],
-body.admin-locked [data-view="matches"] {
+body.admin-locked [data-view="matches"],
+body.admin-locked [data-view="admin"] {
   display: none !important;
 }
 

@@ -182,6 +182,7 @@
     ui.publicDivisionFilter = document.getElementById("public-division-filter");
     ui.publicDisplayMode = document.getElementById("public-display-mode");
     ui.publicFullscreen = document.getElementById("public-fullscreen");
+    ui.generateTestData = document.getElementById("generate-test-data");
   }
 
   function bindEvents() {
@@ -244,6 +245,7 @@
     ui.publicDisplayMode.addEventListener("change", renderPublicBoard);
     ui.publicFullscreen.addEventListener("click", handlePublicFullscreen);
 
+    ui.generateTestData.addEventListener("click", handleGenerateTestData);
     ui.adminLockBtn.addEventListener("click", handleAdminLockBtn);
   }
 
@@ -1655,6 +1657,221 @@
     return [left, right];
   }
 
+  // ── Generate Test Data ───────────────────────────────────────────────────
+
+  function handleGenerateTestData() {
+    var hasData = state.divisions.length > 0 || state.teams.length > 0 || state.matches.length > 0;
+    if (hasData) {
+      if (!window.confirm("This will replace all current tournament data with a test tournament.\n\nContinue?")) {
+        return;
+      }
+    }
+
+    var newState = createEmptyState();
+
+    // Tournament
+    var today = new Date();
+    var todayStr = today.toISOString().slice(0, 10);
+    var tomorrowStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
+    newState.tournament.name = "Spring Classic 2026";
+    newState.tournament.startDate = todayStr;
+    newState.tournament.endDate = tomorrowStr;
+
+    // Venues
+    var venueMain = {
+      id: "v-test-main",
+      name: "Main Sports Center",
+      courts: [
+        { id: "c-test-m1", name: "Court 1" },
+        { id: "c-test-m2", name: "Court 2" },
+        { id: "c-test-m3", name: "Court 3" },
+        { id: "c-test-m4", name: "Court 4" }
+      ]
+    };
+    var venueNorth = {
+      id: "v-test-north",
+      name: "North Gymnasium",
+      courts: [
+        { id: "c-test-na", name: "Court A" },
+        { id: "c-test-nb", name: "Court B" }
+      ]
+    };
+    newState.venues.push(venueMain, venueNorth);
+
+    // Divisions
+    var divisions = [
+      { id: "d-test-14g", name: "14U Girls",  format: "bo3"  },
+      { id: "d-test-16g", name: "16U Girls",  format: "bo3"  },
+      { id: "d-test-18b", name: "18U Boys",   format: "2s25" },
+      { id: "d-test-om",  name: "Open Mixed", format: "2s25" }
+    ];
+    divisions.forEach(function (d) { newState.divisions.push(d); });
+
+    // Teams — 4 per division
+    var teamGroups = [
+      [
+        { id: "t-test-14g-1", name: "Lakeside 14U",        club: "Lakeside VC",   seed: 1 },
+        { id: "t-test-14g-2", name: "Mountain Fire 14U",   club: "Mountain Fire", seed: 2 },
+        { id: "t-test-14g-3", name: "Valley Storm 14U",    club: "Valley SC",     seed: 3 },
+        { id: "t-test-14g-4", name: "Westside Thunder 14U",club: "Westside",      seed: 4 }
+      ],
+      [
+        { id: "t-test-16g-1", name: "Lakeside 16U",        club: "Lakeside VC",   seed: 1 },
+        { id: "t-test-16g-2", name: "Mountain Fire 16U",   club: "Mountain Fire", seed: 2 },
+        { id: "t-test-16g-3", name: "Eastside Sparks 16U", club: "Eastside SC",   seed: 3 },
+        { id: "t-test-16g-4", name: "River Valley 16U",    club: "River Valley",  seed: 4 }
+      ],
+      [
+        { id: "t-test-18b-1", name: "Lakeside 18B",        club: "Lakeside VC",   seed: 1 },
+        { id: "t-test-18b-2", name: "North County 18B",    club: "North County",  seed: 2 },
+        { id: "t-test-18b-3", name: "South Shore 18B",     club: "South Shore",   seed: 3 },
+        { id: "t-test-18b-4", name: "Inland Force 18B",    club: "Inland Force",  seed: 4 }
+      ],
+      [
+        { id: "t-test-om-1",  name: "Unity Mixed",         club: "Unity VC",      seed: 1 },
+        { id: "t-test-om-2",  name: "Highrise Mixed",      club: "Highrise",      seed: 2 },
+        { id: "t-test-om-3",  name: "Crossfire Mixed",     club: "Crossfire",     seed: 3 },
+        { id: "t-test-om-4",  name: "Voltage Mixed",       club: "Voltage",       seed: 4 }
+      ]
+    ];
+    teamGroups.forEach(function (group, divIndex) {
+      group.forEach(function (team) {
+        newState.teams.push({
+          id: team.id,
+          name: team.name,
+          club: team.club,
+          coach: "",
+          divisionId: divisions[divIndex].id,
+          seed: team.seed
+        });
+      });
+    });
+
+    // Matches — round-robin per division, assigned to venues
+    // 14U & 18U → Main Sports Center (4 courts); 16U & Open → North Gymnasium (2 courts)
+    var venueForDiv = [venueMain, venueNorth, venueMain, venueNorth];
+    var slotMs = (45 + 10) * 60000;
+    var base8am = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8, 0, 0);
+
+    divisions.forEach(function (div, divIndex) {
+      var teams = teamGroups[divIndex];
+      var venue = venueForDiv[divIndex];
+      var pairs = [];
+      var i, j;
+      for (i = 0; i < teams.length; i += 1) {
+        for (j = i + 1; j < teams.length; j += 1) {
+          pairs.push([teams[i], teams[j]]);
+        }
+      }
+      pairs.forEach(function (pair, idx) {
+        var court = venue.courts[idx % venue.courts.length];
+        var wave = Math.floor(idx / venue.courts.length);
+        var start = new Date(base8am.getTime() + wave * slotMs);
+        newState.matches.push({
+          id: "m-test-" + div.id + "-" + idx,
+          divisionId: div.id,
+          stage: "pool",
+          roundNumber: idx + 1,
+          teamAId: pair[0].id,
+          teamBId: pair[1].id,
+          venueId: venue.id,
+          courtId: court.id,
+          startTime: start.toISOString(),
+          durationMinutes: 45,
+          status: "scheduled",
+          setScores: [],
+          winnerId: null,
+          loserId: null,
+          workTeamId: null,
+          locked: false,
+          forfeited: false
+        });
+      });
+    });
+
+    // Work teams — rotate non-playing team per match
+    divisions.forEach(function (div, divIndex) {
+      var teams = teamGroups[divIndex];
+      var ids = teams.map(function (t) { return t.id; });
+      var divMatches = newState.matches.filter(function (m) { return m.divisionId === div.id; });
+      divMatches.forEach(function (match, idx) {
+        var notPlaying = ids.filter(function (tid) {
+          return tid !== match.teamAId && tid !== match.teamBId;
+        });
+        match.workTeamId = notPlaying[idx % notPlaying.length] || null;
+      });
+    });
+
+    // Completed scores
+    // bo3 divisions (0, 1): 3 completed matches each
+    // 2s25 divisions (2, 3): 2 completed matches each (only 2-0 outcomes in 2-set format)
+    var completedData = [
+      [ // 14U Girls (bo3)
+        { idx: 0, sets: [[25, 20], [18, 25], [15, 10]] },
+        { idx: 1, sets: [[25, 18], [25, 22]] },
+        { idx: 2, sets: [[22, 25], [25, 23], [15, 12]] }
+      ],
+      [ // 16U Girls (bo3)
+        { idx: 0, sets: [[25, 22], [25, 21]] },
+        { idx: 1, sets: [[20, 25], [25, 23], [12, 15]] },
+        { idx: 2, sets: [[25, 17], [25, 20]] }
+      ],
+      [ // 18U Boys (2s25)
+        { idx: 0, sets: [[25, 21], [25, 19]] },
+        { idx: 1, sets: [[19, 25], [22, 25]] }
+      ],
+      [ // Open Mixed (2s25)
+        { idx: 0, sets: [[25, 20], [25, 23]] },
+        { idx: 1, sets: [[23, 25], [21, 25]] }
+      ]
+    ];
+
+    completedData.forEach(function (entries, divIndex) {
+      var divId = divisions[divIndex].id;
+      var divMatches = newState.matches.filter(function (m) { return m.divisionId === divId; });
+      entries.forEach(function (entry) {
+        var match = divMatches[entry.idx];
+        if (!match) { return; }
+        match.setScores = entry.sets.map(function (s) {
+          return { teamAScore: s[0], teamBScore: s[1] };
+        });
+        var aSets = 0, bSets = 0;
+        match.setScores.forEach(function (set) {
+          if (set.teamAScore > set.teamBScore) { aSets += 1; }
+          else if (set.teamBScore > set.teamAScore) { bSets += 1; }
+        });
+        if (aSets > bSets) {
+          match.status = "completed";
+          match.winnerId = match.teamAId;
+          match.loserId = match.teamBId;
+        } else if (bSets > aSets) {
+          match.status = "completed";
+          match.winnerId = match.teamBId;
+          match.loserId = match.teamAId;
+        }
+      });
+    });
+
+    // Apply to app state
+    state = newState;
+    auditLog("Test tournament data loaded");
+    saveState();
+    renderAll();
+
+    // Navigate to dashboard to see the overview
+    var dashBtn = ui.nav.querySelector("[data-view='dashboard']");
+    if (dashBtn) { dashBtn.click(); }
+
+    var completed = state.matches.filter(function (m) { return m.status === "completed"; }).length;
+    window.alert(
+      "Test tournament loaded!\n" +
+      "\u2022 " + state.divisions.length + " divisions\n" +
+      "\u2022 " + state.teams.length + " teams\n" +
+      "\u2022 " + state.venues.length + " venues\n" +
+      "\u2022 " + state.matches.length + " matches (" + completed + " completed)"
+    );
+  }
+
   function renderAll() {
     renderTournamentForm();
     renderDivisionOptions();
@@ -1933,9 +2150,9 @@
       // Lock: navigate to public view first
       adminUnlocked = false;
       applyAdminLockState();
-      // Navigate to public view
-      var publicBtn = ui.nav.querySelector("[data-view='public']");
-      if (publicBtn) { publicBtn.click(); }
+      // Navigate to dashboard
+      var dashboardBtn = ui.nav.querySelector("[data-view='dashboard']");
+      if (dashboardBtn) { dashboardBtn.click(); }
     } else {
       // Unlock: check PIN
       var storedPin = localStorage.getItem(ADMIN_PIN_KEY);

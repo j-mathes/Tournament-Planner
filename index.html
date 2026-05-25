@@ -26,49 +26,17 @@
         <button class="nav-btn" data-view="team-schedule">Team Schedule</button>
         <button class="nav-btn" data-view="standings">Standings</button>
         <button class="nav-btn" data-view="public">Public Display</button>
+        <button class="nav-btn" data-view="admin">Admin</button>
         <button class="nav-btn nav-lock-btn" id="admin-lock-btn" type="button">🔒 Lock</button>
       </nav>
     </header>
 
     <main class="layout">
       <section class="view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
-        <h2 id="dashboard-title">Tournament Setup</h2>
-        <form id="tournament-form" class="card form-grid">
-          <label>
-            Tournament Name
-            <input type="text" id="tournament-name" required maxlength="120">
-          </label>
-          <label>
-            Start Date
-            <input type="date" id="tournament-start">
-          </label>
-          <label>
-            End Date
-            <input type="date" id="tournament-end">
-          </label>
-          <div class="form-actions">
-            <button type="submit">Save Tournament</button>
-            <button type="button" id="reset-data" class="danger">Reset All Data</button>
-          </div>
-        </form>
-
-        <section class="card split-actions" aria-label="Data IO">
-          <div>
-            <h3>Data</h3>
-            <p>Export and import full tournament data as JSON.</p>
-          </div>
-          <div class="io-actions">
-            <button id="export-json" type="button">Export JSON</button>
-            <label class="file-label" for="import-json">Import JSON</label>
-            <input id="import-json" type="file" accept="application/json">
-          </div>
-        </section>
-
+        <h2 id="dashboard-title">Dashboard</h2>
         <section class="card stats" id="dashboard-stats" aria-live="polite"></section>
         <section class="card" id="admin-alerts" aria-live="polite"></section>
         <section class="card" id="division-status-board"></section>
-        <section class="card" id="admin-security-card" aria-label="Admin Security"></section>
-        <section class="card" id="audit-log-section" aria-label="Audit Log"></section>
       </section>
 
       <section class="view" id="view-divisions" aria-labelledby="divisions-title">
@@ -149,16 +117,6 @@
             <tbody id="team-table-body"></tbody>
           </table>
         </div>
-        <section class="card" aria-label="Bulk Import / Export">
-          <h3 style="margin:0 0 0.6rem">Bulk Import / Export</h3>
-          <div class="form-actions" style="margin-bottom:0.75rem">
-            <button id="export-teams-csv" type="button" class="secondary">Export Teams CSV</button>
-            <button id="download-teams-template" type="button" class="secondary">Download CSV Template</button>
-          </div>
-          <label class="file-label" for="import-teams-csv">Import Teams from CSV</label>
-          <input id="import-teams-csv" type="file" accept=".csv,text/csv">
-          <div id="csv-import-preview" style="margin-top:0.75rem"></div>
-        </section>
       </section>
 
       <section class="view" id="view-matches" aria-labelledby="matches-title">
@@ -396,6 +354,62 @@
           </div>
         </section>
         <div id="public-board"></div>
+      </section>
+
+      <section class="view" id="view-admin" aria-labelledby="admin-title">
+        <h2 id="admin-title">Admin</h2>
+
+        <form id="tournament-form" class="card form-grid">
+          <h3 style="margin:0 0 0.75rem">Tournament Setup</h3>
+          <label>
+            Tournament Name
+            <input type="text" id="tournament-name" required maxlength="120">
+          </label>
+          <label>
+            Start Date
+            <input type="date" id="tournament-start">
+          </label>
+          <label>
+            End Date
+            <input type="date" id="tournament-end">
+          </label>
+          <div class="form-actions">
+            <button type="submit">Save Tournament</button>
+          </div>
+        </form>
+
+        <section class="card" aria-label="Data Management">
+          <h3 style="margin:0 0 0.6rem">Data Management</h3>
+          <p style="margin:0 0 0.75rem">Export or import the full tournament as JSON. Reset clears all data.</p>
+          <div class="form-actions">
+            <button id="export-json" type="button">Export JSON</button>
+            <label class="file-label" for="import-json">Import JSON</label>
+            <input id="import-json" type="file" accept="application/json">
+            <button id="reset-data" type="button" class="danger">Reset All Data</button>
+          </div>
+        </section>
+
+        <section class="card" aria-label="Teams Bulk Import / Export">
+          <h3 style="margin:0 0 0.6rem">Teams Bulk Import / Export</h3>
+          <div class="form-actions" style="margin-bottom:0.75rem">
+            <button id="export-teams-csv" type="button" class="secondary">Export Teams CSV</button>
+            <button id="download-teams-template" type="button" class="secondary">Download CSV Template</button>
+          </div>
+          <label class="file-label" for="import-teams-csv">Import Teams from CSV</label>
+          <input id="import-teams-csv" type="file" accept=".csv,text/csv">
+          <div id="csv-import-preview" style="margin-top:0.75rem"></div>
+        </section>
+
+        <section class="card" aria-label="Test Data">
+          <h3 style="margin:0 0 0.6rem">Generate Test Data</h3>
+          <p style="margin:0 0 0.75rem">Load a complete sample tournament &#8212; 4 divisions, 16 teams, 2 venues, and 24 pool-play matches with partial results &#8212; to explore every feature without entering data manually.</p>
+          <div class="form-actions">
+            <button id="generate-test-data" type="button" class="secondary">Load Test Tournament</button>
+          </div>
+        </section>
+
+        <section class="card" id="admin-security-card" aria-label="Admin Security"></section>
+        <section class="card" id="audit-log-section" aria-label="Audit Log"></section>
       </section>
     </main>
 
