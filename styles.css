@@ -216,13 +216,24 @@ button.secondary:hover {
   cursor: pointer;
 }
 
-#import-json {
+#import-json,
+#import-teams-csv {
   display: none;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+}
+
+.csv-preview-table {
+  font-size: 0.82rem;
+}
+
+.csv-preview-table td,
+.csv-preview-table th {
+  vertical-align: top;
+  white-space: normal;
 }
 
 th,

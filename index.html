@@ -142,6 +142,16 @@
             <tbody id="team-table-body"></tbody>
           </table>
         </div>
+        <section class="card" aria-label="Bulk Import / Export">
+          <h3 style="margin:0 0 0.6rem">Bulk Import / Export</h3>
+          <div class="form-actions" style="margin-bottom:0.75rem">
+            <button id="export-teams-csv" type="button" class="secondary">Export Teams CSV</button>
+            <button id="download-teams-template" type="button" class="secondary">Download CSV Template</button>
+          </div>
+          <label class="file-label" for="import-teams-csv">Import Teams from CSV</label>
+          <input id="import-teams-csv" type="file" accept=".csv,text/csv">
+          <div id="csv-import-preview" style="margin-top:0.75rem"></div>
+        </section>
       </section>
 
       <section class="view" id="view-matches" aria-labelledby="matches-title">

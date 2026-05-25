@@ -110,6 +110,10 @@
     ui.teamSubmitBtn = document.getElementById("team-submit-btn");
     ui.teamCancelEdit = document.getElementById("team-cancel-edit");
     ui.teamTableBody = document.getElementById("team-table-body");
+    ui.exportTeamsCsv = document.getElementById("export-teams-csv");
+    ui.downloadTeamsTemplate = document.getElementById("download-teams-template");
+    ui.importTeamsCsv = document.getElementById("import-teams-csv");
+    ui.csvImportPreview = document.getElementById("csv-import-preview");
 
     ui.venueForm = document.getElementById("venue-form");
     ui.venueEditId = document.getElementById("venue-edit-id");
@@ -187,6 +191,9 @@
     ui.teamForm.addEventListener("submit", handleTeamAdd);
     ui.teamCancelEdit.addEventListener("click", resetTeamForm);
     ui.teamTableBody.addEventListener("click", handleTeamActions);
+    ui.exportTeamsCsv.addEventListener("click", handleExportTeamsCsv);
+    ui.downloadTeamsTemplate.addEventListener("click", handleDownloadTeamsTemplate);
+    ui.importTeamsCsv.addEventListener("change", handleTeamCsvFile);
 
     ui.venueForm.addEventListener("submit", handleVenueSubmit);
     ui.venueCancelEdit.addEventListener("click", resetVenueForm);
@@ -951,6 +958,214 @@
     window.print();
     clearPrintContext();
   }
+
+  // ── Spec 14: Teams CSV Import / Export ───────────────────────────────────
+
+  var _teamImportRows = []; // staging area for parsed rows
+
+  function handleExportTeamsCsv() {
+    var rows = state.teams
+      .slice()
+      .sort(compareTeams)
+      .map(function (team) {
+        var division = findDivision(team.divisionId);
+        return [
+          csvCell(team.name),
+          csvCell(team.club || ""),
+          csvCell(team.coach || ""),
+          csvCell(division ? division.name : ""),
+          csvCell(team.seed || "")
+        ].join(",");
+      });
+    var header = "name,club,coach,division,seed";
+    downloadCsv("teams.csv", header + "\n" + rows.join("\n"));
+  }
+
+  function handleDownloadTeamsTemplate() {
+    var divisionNames = state.divisions.map(function (d) { return d.name; }).join(" | ");
+    var comment = divisionNames ? "# Available divisions: " + divisionNames + "\n" : "";
+    var example = "Example Team A,Example Club,Coach Name," +
+      (state.divisions[0] ? state.divisions[0].name : "Division Name") + ",1\n" +
+      "Example Team B,,,," ;
+    downloadCsv("teams_template.csv", comment + "name,club,coach,division,seed\n" + example);
+  }
+
+  function parseCsvRows(text) {
+    // Minimal RFC-4180 CSV parser (handles quoted fields with embedded commas/newlines)
+    var results = [];
+    var lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    lines.forEach(function (line) {
+      if (!line.trim() || line.trim().charAt(0) === "#") { return; }
+      var row = [];
+      var col = "";
+      var inQuotes = false;
+      for (var i = 0; i < line.length; i++) {
+        var ch = line[i];
+        if (inQuotes) {
+          if (ch === '"' && line[i + 1] === '"') { col += '"'; i++; }
+          else if (ch === '"') { inQuotes = false; }
+          else { col += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; }
+          else if (ch === ",") { row.push(col.trim()); col = ""; }
+          else { col += ch; }
+        }
+      }
+      row.push(col.trim());
+      results.push(row);
+    });
+    return results;
+  }
+
+  function handleTeamCsvFile(event) {
+    var file = event.target.files[0];
+    if (!file) { return; }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var text = e.target.result;
+      _teamImportRows = parseTeamCsvRows(text);
+      renderTeamImportPreview();
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  }
+
+  function parseTeamCsvRows(text) {
+    var all = parseCsvRows(text);
+    if (!all.length) { return []; }
+
+    // Detect header row
+    var headerRow = all[0].map(function (h) { return h.toLowerCase(); });
+    var nameIdx = headerRow.indexOf("name");
+    var clubIdx = headerRow.indexOf("club");
+    var coachIdx = headerRow.indexOf("coach");
+    var divIdx = headerRow.indexOf("division");
+    var seedIdx = headerRow.indexOf("seed");
+
+    // If no recognised header, assume positional: name,club,coach,division,seed
+    var hasHeader = nameIdx !== -1;
+    if (!hasHeader) {
+      nameIdx = 0; clubIdx = 1; coachIdx = 2; divIdx = 3; seedIdx = 4;
+    }
+
+    var dataRows = hasHeader ? all.slice(1) : all;
+    var existingNames = state.teams.map(function (t) { return t.name.toLowerCase(); });
+
+    return dataRows
+      .filter(function (row) { return row.some(function (c) { return c; }); }) // skip blank rows
+      .map(function (row) {
+        var name = (row[nameIdx] || "").trim();
+        var club = clubIdx >= 0 ? (row[clubIdx] || "").trim() : "";
+        var coach = coachIdx >= 0 ? (row[coachIdx] || "").trim() : "";
+        var divisionName = divIdx >= 0 ? (row[divIdx] || "").trim() : "";
+        var seedRaw = seedIdx >= 0 ? (row[seedIdx] || "").trim() : "";
+
+        var warnings = [];
+        var errors = [];
+
+        if (!name) {
+          errors.push("Name is required.");
+        } else if (existingNames.indexOf(name.toLowerCase()) !== -1) {
+          warnings.push("Team \"" + name + "\" already exists and will be skipped.");
+        }
+
+        var division = null;
+        if (divisionName) {
+          division = state.divisions.find(function (d) {
+            return d.name.toLowerCase() === divisionName.toLowerCase();
+          });
+          if (!division) {
+            warnings.push("Division \"" + divisionName + "\" not found \u2014 team will be added without a division.");
+          }
+        }
+
+        var seed = null;
+        if (seedRaw) {
+          seed = parseInt(seedRaw, 10);
+          if (isNaN(seed) || seed < 1) {
+            warnings.push("Seed \"" + seedRaw + "\" is invalid and will be ignored.");
+            seed = null;
+          }
+        }
+
+        return {
+          name: name,
+          club: club,
+          coach: coach,
+          divisionName: divisionName,
+          divisionId: division ? division.id : null,
+          seed: seed,
+          warnings: warnings,
+          errors: errors
+        };
+      });
+  }
+
+  function renderTeamImportPreview() {
+    var rows = _teamImportRows;
+    if (!rows.length) {
+      ui.csvImportPreview.innerHTML = "<p>No rows found in file.</p>";
+      return;
+    }
+
+    var validCount = rows.filter(function (r) { return !r.errors.length && !(r.warnings.some(function (w) { return w.indexOf("already exists") !== -1; })); }).length;
+
+    var tableRows = rows.map(function (r) {
+      var status = r.errors.length ? "\u274C" : (r.warnings.length ? "\u26A0\uFE0F" : "\u2714\uFE0F");
+      var notes = r.errors.concat(r.warnings).map(function (w) { return "<li>" + escapeHtml(w) + "</li>"; }).join("");
+      return "<tr>" +
+        "<td>" + status + "</td>" +
+        "<td>" + escapeHtml(r.name || "\u2014") + "</td>" +
+        "<td>" + escapeHtml(r.club || "\u2014") + "</td>" +
+        "<td>" + escapeHtml(r.divisionName || "\u2014") + "</td>" +
+        "<td>" + (r.seed || "\u2014") + "</td>" +
+        "<td><ul style='margin:0;padding-left:1.2rem'>" + notes + "</ul></td>" +
+        "</tr>";
+    }).join("");
+
+    ui.csvImportPreview.innerHTML =
+      "<p><strong>" + validCount + " of " + rows.length + " rows will be added.</strong></p>" +
+      "<div style='overflow-x:auto'><table class='csv-preview-table'><thead><tr>" +
+      "<th></th><th>Name</th><th>Club</th><th>Division</th><th>Seed</th><th>Notes</th>" +
+      "</tr></thead><tbody>" + tableRows + "</tbody></table></div>" +
+      (validCount > 0
+        ? "<div class='form-actions' style='margin-top:0.75rem'>" +
+          "<button type='button' id='apply-team-import'>Apply Import (" + validCount + " teams)</button>" +
+          "<button type='button' id='cancel-team-import' class='secondary'>Cancel</button>" +
+          "</div>"
+        : "<p>No valid rows to import.</p>");
+
+    document.getElementById("apply-team-import") &&
+      document.getElementById("apply-team-import").addEventListener("click", handleApplyTeamImport);
+    document.getElementById("cancel-team-import") &&
+      document.getElementById("cancel-team-import").addEventListener("click", function () {
+        _teamImportRows = [];
+        ui.csvImportPreview.innerHTML = "";
+      });
+  }
+
+  function handleApplyTeamImport() {
+    var added = 0;
+    _teamImportRows.forEach(function (row) {
+      if (row.errors.length) { return; }
+      if (row.warnings.some(function (w) { return w.indexOf("already exists") !== -1; })) { return; }
+      state.teams.push({
+        id: generateId(),
+        name: row.name,
+        club: row.club,
+        coach: row.coach,
+        divisionId: row.divisionId || (state.divisions[0] ? state.divisions[0].id : null),
+        seed: row.seed
+      });
+      added++;
+    });
+    _teamImportRows = [];
+    ui.csvImportPreview.innerHTML = "<p>\u2714\uFE0F " + added + " team" + (added === 1 ? "" : "s") + " imported successfully.</p>";
+    saveState();
+    renderAll();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   function handleExportMatchesCsv() {
     var divisionId = ui.matchDivision.value || "";

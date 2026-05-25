@@ -81,9 +81,14 @@ It is designed to:
 - Team schedule
   - Team-specific schedule view with team filter
   - Team schedule print workflow
-- Data handling
-  - Export full app data as JSON
-  - Import app data from JSON
+- Data import & export
+  - Export all teams as CSV
+  - Download a pre-formatted CSV template with column headers and an example row (division names pre-filled)
+  - Import teams from CSV — flexible header detection (name, club, coach, division, seed); shows a validation preview table before applying: ✔ valid rows, ⚠ warnings (unknown division, already exists, invalid seed), ✗ errors (missing name); applies only valid rows on confirm
+  - Export match schedule as CSV (already in Matches view)
+  - Export standings as CSV (already in Standings view)
+  - Export / import full app data as JSON (in Dashboard)
+  - Export / import division bracket structure as JSON (in Brackets view)
 - Printing
   - Print-friendly schedule and standings output with context header (event, dates, filter/team/division)
   - Dedicated print actions for Matches, Team Schedule, Standings, and Brackets
