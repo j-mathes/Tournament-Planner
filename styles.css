@@ -67,11 +67,39 @@ p {
   cursor: pointer;
 }
 
+.nav-lock-btn {
+  margin-left: auto;
+}
+
 .nav-btn.is-active,
 .nav-btn:hover {
   border-color: var(--brand);
   color: #fff;
   background: var(--brand);
+}
+
+/* Admin lock state: hide write-heavy nav and show locked indicator */
+body.admin-locked [data-view="divisions"],
+body.admin-locked [data-view="teams"],
+body.admin-locked [data-view="venues"],
+body.admin-locked [data-view="matches"] {
+  display: none !important;
+}
+
+body.admin-locked .danger,
+body.admin-locked form:not(#tournament-form) button[type="submit"],
+body.admin-locked .score-form,
+body.admin-locked .assignment-form,
+body.admin-locked .forfeit-form,
+body.admin-locked .match-actions,
+body.admin-locked .work-actions,
+body.admin-locked .admin-actions,
+body.admin-locked #auto-assign-schedule,
+body.admin-locked #auto-assign-work-teams,
+body.admin-locked #print-court-schedule,
+body.admin-locked #print-work-sheet,
+body.admin-locked #reset-data {
+  display: none !important;
 }
 
 .layout {

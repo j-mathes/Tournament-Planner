@@ -51,6 +51,8 @@
   var assignmentEditMatchId = null;
   var workEditMatchId = null;
   var forfeitMatchId = null;
+  var adminUnlocked = true;
+  var ADMIN_PIN_KEY = "tp.admin.pin";
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -59,6 +61,7 @@
     bindEvents();
     window.addEventListener("afterprint", clearPrintContext);
     loadState();
+    applyAdminLockState();
     renderAll();
   }
 
@@ -73,7 +76,8 @@
       divisions: [],
       teams: [],
       venues: [],
-      matches: []
+      matches: [],
+      auditLog: []
     };
   }
 
@@ -89,6 +93,9 @@
     ui.dashboardStats = document.getElementById("dashboard-stats");
     ui.adminAlerts = document.getElementById("admin-alerts");
     ui.divisionStatusBoard = document.getElementById("division-status-board");
+    ui.adminSecurityCard = document.getElementById("admin-security-card");
+    ui.auditLogSection = document.getElementById("audit-log-section");
+    ui.adminLockBtn = document.getElementById("admin-lock-btn");
     ui.exportJson = document.getElementById("export-json");
     ui.importJson = document.getElementById("import-json");
 
@@ -236,6 +243,8 @@
     ui.publicDivisionFilter.addEventListener("change", renderPublicBoard);
     ui.publicDisplayMode.addEventListener("change", renderPublicBoard);
     ui.publicFullscreen.addEventListener("click", handlePublicFullscreen);
+
+    ui.adminLockBtn.addEventListener("click", handleAdminLockBtn);
   }
 
   function handleNavClick(event) {
@@ -1161,6 +1170,7 @@
     });
     _teamImportRows = [];
     ui.csvImportPreview.innerHTML = "<p>\u2714\uFE0F " + added + " team" + (added === 1 ? "" : "s") + " imported successfully.</p>";
+    auditLog("Imported " + added + " team" + (added === 1 ? "" : "s") + " from CSV");
     saveState();
     renderAll();
   }
@@ -1400,6 +1410,8 @@
     if (match.stage === "bracket") {
       recomputeBracketProgression(match.divisionId);
     }
+    var loserTeam = findTeam(match.loserId);
+    auditLog("Forfeit: " + (loserTeam ? loserTeam.name : "unknown") + " forfeited \u2014 " + getMatchLabel(match));
     saveState();
     renderAll();
   }
@@ -1444,6 +1456,7 @@
     if (match.stage === "bracket") {
       recomputeBracketProgression(match.divisionId);
     }
+    auditLog("Score saved: " + getMatchLabel(match) + " \u2192 " + match.status);
     saveState();
     renderAll();
   }
@@ -1550,6 +1563,7 @@
     }
     if (action === "lock-match") {
       match.locked = true;
+      auditLog("Match locked: " + getMatchLabel(match));
       saveState();
       renderMatches();
       renderDashboardStats();
@@ -1557,6 +1571,7 @@
     }
     if (action === "unlock-match") {
       match.locked = false;
+      auditLog("Match unlocked: " + getMatchLabel(match));
       saveState();
       renderMatches();
       renderDashboardStats();
@@ -1807,6 +1822,8 @@
     ui.dashboardStats.innerHTML = html;
     renderAdminAlerts();
     renderDivisionStatus();
+    renderAdminSecurity();
+    renderAuditLog();
   }
 
   function renderAdminAlerts() {
@@ -1901,6 +1918,108 @@
       "<th>Division</th><th>Teams</th><th>Pools</th><th>Bracket</th><th>Matches</th><th>Status</th><th>Champion</th>" +
       "</tr></thead><tbody>" + rows + "</tbody></table>";
   }
+
+  // ── Spec 15: Admin Lock & Audit Log ──────────────────────────────────────
+
+  function applyAdminLockState() {
+    document.body.classList.toggle("admin-locked", !adminUnlocked);
+    if (ui.adminLockBtn) {
+      ui.adminLockBtn.textContent = adminUnlocked ? "\uD83D\uDD12 Lock" : "\uD83D\uDD13 Unlock";
+    }
+  }
+
+  function handleAdminLockBtn() {
+    if (adminUnlocked) {
+      // Lock: navigate to public view first
+      adminUnlocked = false;
+      applyAdminLockState();
+      // Navigate to public view
+      var publicBtn = ui.nav.querySelector("[data-view='public']");
+      if (publicBtn) { publicBtn.click(); }
+    } else {
+      // Unlock: check PIN
+      var storedPin = localStorage.getItem(ADMIN_PIN_KEY);
+      if (storedPin) {
+        var entered = window.prompt("Enter admin PIN to unlock:");
+        if (entered === null) { return; }
+        if (entered !== storedPin) {
+          window.alert("Incorrect PIN.");
+          return;
+        }
+      }
+      adminUnlocked = true;
+      applyAdminLockState();
+      auditLog("Admin unlocked");
+    }
+  }
+
+  function renderAdminSecurity() {
+    if (!ui.adminSecurityCard) { return; }
+    var storedPin = localStorage.getItem(ADMIN_PIN_KEY);
+    var pinStatus = storedPin ? "PIN is set." : "No PIN set \u2014 anyone can unlock.";
+    ui.adminSecurityCard.innerHTML =
+      "<h3 style='margin:0 0 0.6rem'>\uD83D\uDD10 Admin Security</h3>" +
+      "<p style='margin:0 0 0.75rem;font-size:0.9rem'>" + escapeHtml(pinStatus) + "</p>" +
+      "<form id='pin-form' class='form-grid' style='gap:0.5rem'>" +
+        "<label style='max-width:200px'>New PIN (4 digits)<input type='password' id='pin-input' maxlength='4' pattern='[0-9]{4}' placeholder='1234' inputmode='numeric'></label>" +
+        "<div class='form-actions'>" +
+          "<button type='submit' id='pin-save-btn'>Save PIN</button>" +
+          (storedPin ? "<button type='button' id='pin-clear-btn' class='secondary'>Remove PIN</button>" : "") +
+        "</div>" +
+      "</form>";
+
+    document.getElementById("pin-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var val = document.getElementById("pin-input").value.trim();
+      if (!/^\d{4}$/.test(val)) {
+        window.alert("PIN must be exactly 4 digits.");
+        return;
+      }
+      localStorage.setItem(ADMIN_PIN_KEY, val);
+      auditLog("Admin PIN changed");
+      renderAdminSecurity();
+    });
+    var clearBtn = document.getElementById("pin-clear-btn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        if (window.confirm("Remove the admin PIN?")) {
+          localStorage.removeItem(ADMIN_PIN_KEY);
+          auditLog("Admin PIN removed");
+          renderAdminSecurity();
+        }
+      });
+    }
+  }
+
+  function auditLog(action) {
+    if (!Array.isArray(state.auditLog)) { state.auditLog = []; }
+    state.auditLog.unshift({ ts: new Date().toISOString(), action: action });
+    if (state.auditLog.length > 100) { state.auditLog.length = 100; }
+    saveState();
+    renderAuditLog();
+  }
+
+  function renderAuditLog() {
+    if (!ui.auditLogSection) { return; }
+    var log = Array.isArray(state.auditLog) ? state.auditLog : [];
+    if (!log.length) {
+      ui.auditLogSection.innerHTML = "";
+      return;
+    }
+    var rows = log.slice(0, 20).map(function (entry) {
+      var ts = "";
+      try { ts = new Date(entry.ts).toLocaleString(); } catch (e) { ts = entry.ts; }
+      return "<tr><td style='white-space:nowrap;color:var(--muted);font-size:0.8rem'>" + escapeHtml(ts) + "</td>" +
+        "<td>" + escapeHtml(entry.action) + "</td></tr>";
+    }).join("");
+    ui.auditLogSection.innerHTML =
+      "<h3 style='margin:0 0 0.6rem'>\uD83D\uDCCB Audit Log</h3>" +
+      "<div style='overflow-x:auto'><table><thead><tr><th>Time</th><th>Action</th></tr></thead>" +
+      "<tbody>" + rows + "</tbody></table></div>" +
+      (log.length > 20 ? "<p style='font-size:0.8rem;color:var(--muted);margin:0.4rem 0 0'>" + (log.length - 20) + " older entries not shown.</p>" : "");
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   function renderDivisions() {
     ui.divisionTableBody.innerHTML = state.divisions
@@ -3045,9 +3164,13 @@
         status: match.status || "scheduled",
         setScores: Array.isArray(match.setScores) ? match.setScores : [],
         winnerId: match.winnerId || null,
-        loserId: match.loserId || null
+        loserId: match.loserId || null,
+        workTeamId: match.workTeamId || null,
+        locked: match.locked || false,
+        forfeited: match.forfeited || false
       };
     }) : [];
+    normalized.auditLog = Array.isArray(input.auditLog) ? input.auditLog : [];
 
     state = normalized;
     normalizeMatchAssignments();

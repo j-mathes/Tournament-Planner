@@ -92,6 +92,10 @@ It is designed to:
 - Printing
   - Print-friendly schedule and standings output with context header (event, dates, filter/team/division)
   - Dedicated print actions for Matches, Team Schedule, Standings, and Brackets
+- User permissions & admin security
+  - Admin PIN lock — set a 4-digit PIN in the Dashboard; click "🔒 Lock" in the nav to enter read-only kiosk mode; entering the PIN unlocks full admin access
+  - When locked: Divisions, Teams, Venues, and Matches nav tabs are hidden; all edit forms, score entry, and write buttons are suppressed via CSS
+  - Audit log — last 100 admin actions recorded with timestamps; shown in the Dashboard; entries include score saves, forfeits, match locks/unlocks, CSV imports, and PIN changes
 
 ## Tech Stack
 
