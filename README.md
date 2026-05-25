@@ -24,7 +24,7 @@ It is designed to:
 - Match management
   - Generate round-robin matches per division
   - Auto-assign venue, court, and start time by division
-  - Manual per-match assignment override (Assign / Clear Assignment)
+  - Inline per-match assignment editor (Assign / Edit / Clear Assignment)
   - Filter matches by division, venue, court, and status
   - Enter set scores
   - Clear match scores
@@ -98,14 +98,14 @@ Notes:
 - No backend APIs
 - No authentication
 - Scheduling uses simple slot sequencing and court rotation (no advanced constraint solver)
-- Manual match assignment currently uses prompt-based input flow
+- Match assignment does not yet include drag-and-drop or conflict warnings
 
 ## Roadmap
 
 Planned next improvements:
-- Inline per-match assignment editor (replace prompt flow)
 - Team schedule view with team filter and print workflow
 - Improved print layouts for schedules and standings
+- Scheduling conflict detection and warnings
 - More advanced tournament formats and bracket workflows
 
 ## License
